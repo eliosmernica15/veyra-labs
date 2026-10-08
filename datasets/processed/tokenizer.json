@@ -1,0 +1,673 @@
+{
+  "version": "1.0",
+  "truncation": null,
+  "padding": null,
+  "added_tokens": [
+    {
+      "id": 0,
+      "content": "</s>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 1,
+      "content": "<pad>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 2,
+      "content": "<unk>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    }
+  ],
+  "normalizer": null,
+  "pre_tokenizer": {
+    "type": "Whitespace"
+  },
+  "post_processor": null,
+  "decoder": null,
+  "model": {
+    "type": "BPE",
+    "dropout": null,
+    "unk_token": null,
+    "continuing_subword_prefix": null,
+    "end_of_word_suffix": null,
+    "fuse_unk": false,
+    "byte_fallback": false,
+    "ignore_merges": false,
+    "vocab": {
+      "</s>": 0,
+      "<pad>": 1,
+      "<unk>": 2,
+      "-": 3,
+      ".": 4,
+      "A": 5,
+      "C": 6,
+      "E": 7,
+      "I": 8,
+      "M": 9,
+      "N": 10,
+      "T": 11,
+      "W": 12,
+      "a": 13,
+      "b": 14,
+      "c": 15,
+      "d": 16,
+      "e": 17,
+      "f": 18,
+      "g": 19,
+      "h": 20,
+      "i": 21,
+      "j": 22,
+      "k": 23,
+      "l": 24,
+      "m": 25,
+      "n": 26,
+      "o": 27,
+      "p": 28,
+      "q": 29,
+      "r": 30,
+      "s": 31,
+      "t": 32,
+      "u": 33,
+      "v": 34,
+      "w": 35,
+      "x": 36,
+      "y": 37,
+      "z": 38,
+      "in": 39,
+      "at": 40,
+      "er": 41,
+      "en": 42,
+      "es": 43,
+      "an": 44,
+      "he": 45,
+      "el": 46,
+      "re": 47,
+      "on": 48,
+      "ro": 49,
+      "ti": 50,
+      "to": 51,
+      "ing": 52,
+      "and": 53,
+      "al": 54,
+      "ic": 55,
+      "od": 56,
+      "st": 57,
+      "th": 58,
+      "ces": 59,
+      "fo": 60,
+      "pro": 61,
+      "res": 62,
+      "se": 63,
+      "un": 64,
+      "The": 65,
+      "ar": 66,
+      "dat": 67,
+      "im": 68,
+      "iz": 69,
+      "le": 70,
+      "mod": 71,
+      "of": 72,
+      "per": 73,
+      "qu": 74,
+      "ts": 75,
+      "the": 76,
+      "ver": 77,
+      "cess": 78,
+      "process": 79,
+      "data": 80,
+      "model": 81,
+      "ag": 82,
+      "ain": 83,
+      "ce": 84,
+      "ch": 85,
+      "ci": 86,
+      "ex": 87,
+      "fic": 88,
+      "gen": 89,
+      "is": 90,
+      "ion": 91,
+      "ms": 92,
+      "om": 93,
+      "rain": 94,
+      "um": 95,
+      "us": 96,
+      "int": 97,
+      "ate": 98,
+      "ation": 99,
+      "ent": 100,
+      "enti": 101,
+      "ell": 102,
+      "for": 103,
+      "age": 104,
+      "raining": 105,
+      "as": 106,
+      "be": 107,
+      "ct": 108,
+      "can": 109,
+      "gh": 110,
+      "gu": 111,
+      "il": 112,
+      "it": 113,
+      "ith": 114,
+      "igen": 115,
+      "ks": 116,
+      "ken": 117,
+      "ly": 118,
+      "lan": 119,
+      "me": 120,
+      "mat": 121,
+      "os": 122,
+      "over": 123,
+      "ph": 124,
+      "po": 125,
+      "pu": 126,
+      "pres": 127,
+      "sci": 128,
+      "ter": 129,
+      "training": 130,
+      "ure": 131,
+      "ures": 132,
+      "ves": 133,
+      "we": 134,
+      "erv": 135,
+      "eric": 136,
+      "ena": 137,
+      "requ": 138,
+      "token": 139,
+      "stand": 140,
+      "that": 141,
+      "und": 142,
+      "arn": 143,
+      "learn": 144,
+      "perim": 145,
+      "perfor": 146,
+      "experim": 147,
+      "fici": 148,
+      "intell": 149,
+      "guage": 150,
+      "igence": 151,
+      "language": 152,
+      "requi": 153,
+      "intelligence": 154
+    },
+    "merges": [
+      [
+        "i",
+        "n"
+      ],
+      [
+        "a",
+        "t"
+      ],
+      [
+        "e",
+        "r"
+      ],
+      [
+        "e",
+        "n"
+      ],
+      [
+        "e",
+        "s"
+      ],
+      [
+        "a",
+        "n"
+      ],
+      [
+        "h",
+        "e"
+      ],
+      [
+        "e",
+        "l"
+      ],
+      [
+        "r",
+        "e"
+      ],
+      [
+        "o",
+        "n"
+      ],
+      [
+        "r",
+        "o"
+      ],
+      [
+        "t",
+        "i"
+      ],
+      [
+        "t",
+        "o"
+      ],
+      [
+        "in",
+        "g"
+      ],
+      [
+        "an",
+        "d"
+      ],
+      [
+        "a",
+        "l"
+      ],
+      [
+        "i",
+        "c"
+      ],
+      [
+        "o",
+        "d"
+      ],
+      [
+        "s",
+        "t"
+      ],
+      [
+        "t",
+        "h"
+      ],
+      [
+        "c",
+        "es"
+      ],
+      [
+        "f",
+        "o"
+      ],
+      [
+        "p",
+        "ro"
+      ],
+      [
+        "r",
+        "es"
+      ],
+      [
+        "s",
+        "e"
+      ],
+      [
+        "u",
+        "n"
+      ],
+      [
+        "T",
+        "he"
+      ],
+      [
+        "a",
+        "r"
+      ],
+      [
+        "d",
+        "at"
+      ],
+      [
+        "i",
+        "m"
+      ],
+      [
+        "i",
+        "z"
+      ],
+      [
+        "l",
+        "e"
+      ],
+      [
+        "m",
+        "od"
+      ],
+      [
+        "o",
+        "f"
+      ],
+      [
+        "p",
+        "er"
+      ],
+      [
+        "q",
+        "u"
+      ],
+      [
+        "t",
+        "s"
+      ],
+      [
+        "t",
+        "he"
+      ],
+      [
+        "v",
+        "er"
+      ],
+      [
+        "ces",
+        "s"
+      ],
+      [
+        "pro",
+        "cess"
+      ],
+      [
+        "dat",
+        "a"
+      ],
+      [
+        "mod",
+        "el"
+      ],
+      [
+        "a",
+        "g"
+      ],
+      [
+        "a",
+        "in"
+      ],
+      [
+        "c",
+        "e"
+      ],
+      [
+        "c",
+        "h"
+      ],
+      [
+        "c",
+        "i"
+      ],
+      [
+        "e",
+        "x"
+      ],
+      [
+        "f",
+        "ic"
+      ],
+      [
+        "g",
+        "en"
+      ],
+      [
+        "i",
+        "s"
+      ],
+      [
+        "i",
+        "on"
+      ],
+      [
+        "m",
+        "s"
+      ],
+      [
+        "o",
+        "m"
+      ],
+      [
+        "r",
+        "ain"
+      ],
+      [
+        "u",
+        "m"
+      ],
+      [
+        "u",
+        "s"
+      ],
+      [
+        "in",
+        "t"
+      ],
+      [
+        "at",
+        "e"
+      ],
+      [
+        "at",
+        "ion"
+      ],
+      [
+        "en",
+        "t"
+      ],
+      [
+        "en",
+        "ti"
+      ],
+      [
+        "el",
+        "l"
+      ],
+      [
+        "fo",
+        "r"
+      ],
+      [
+        "ag",
+        "e"
+      ],
+      [
+        "rain",
+        "ing"
+      ],
+      [
+        "a",
+        "s"
+      ],
+      [
+        "b",
+        "e"
+      ],
+      [
+        "c",
+        "t"
+      ],
+      [
+        "c",
+        "an"
+      ],
+      [
+        "g",
+        "h"
+      ],
+      [
+        "g",
+        "u"
+      ],
+      [
+        "i",
+        "l"
+      ],
+      [
+        "i",
+        "t"
+      ],
+      [
+        "i",
+        "th"
+      ],
+      [
+        "i",
+        "gen"
+      ],
+      [
+        "k",
+        "s"
+      ],
+      [
+        "k",
+        "en"
+      ],
+      [
+        "l",
+        "y"
+      ],
+      [
+        "l",
+        "an"
+      ],
+      [
+        "m",
+        "e"
+      ],
+      [
+        "m",
+        "at"
+      ],
+      [
+        "o",
+        "s"
+      ],
+      [
+        "o",
+        "ver"
+      ],
+      [
+        "p",
+        "h"
+      ],
+      [
+        "p",
+        "o"
+      ],
+      [
+        "p",
+        "u"
+      ],
+      [
+        "p",
+        "res"
+      ],
+      [
+        "s",
+        "ci"
+      ],
+      [
+        "t",
+        "er"
+      ],
+      [
+        "t",
+        "raining"
+      ],
+      [
+        "u",
+        "re"
+      ],
+      [
+        "u",
+        "res"
+      ],
+      [
+        "v",
+        "es"
+      ],
+      [
+        "w",
+        "e"
+      ],
+      [
+        "er",
+        "v"
+      ],
+      [
+        "er",
+        "ic"
+      ],
+      [
+        "en",
+        "a"
+      ],
+      [
+        "re",
+        "qu"
+      ],
+      [
+        "to",
+        "ken"
+      ],
+      [
+        "st",
+        "and"
+      ],
+      [
+        "th",
+        "at"
+      ],
+      [
+        "un",
+        "d"
+      ],
+      [
+        "ar",
+        "n"
+      ],
+      [
+        "le",
+        "arn"
+      ],
+      [
+        "per",
+        "im"
+      ],
+      [
+        "per",
+        "for"
+      ],
+      [
+        "ex",
+        "perim"
+      ],
+      [
+        "fic",
+        "i"
+      ],
+      [
+        "int",
+        "ell"
+      ],
+      [
+        "gu",
+        "age"
+      ],
+      [
+        "igen",
+        "ce"
+      ],
+      [
+        "lan",
+        "guage"
+      ],
+      [
+        "requ",
+        "i"
+      ],
+      [
+        "intell",
+        "igence"
+      ]
+    ]
+  }
+}

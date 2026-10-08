@@ -1,0 +1,12 @@
+{
+  "checkpoint": "checkpoint_final.pt",
+  "step": 50,
+  "avg_loss": 1.1316266179084777,
+  "perplexity": 3.1006960480245698,
+  "samples_evaluated": 5,
+  "tokenizer_roundtrip_ok": true,
+  "checkpoint_load_equivalence": true,
+  "vocab_size": 155,
+  "context_length": 128,
+  "model_params_estimated": 564992
+}
