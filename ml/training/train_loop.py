@@ -18,6 +18,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("veyra.training")
 
 
+# Detect best available device for portability (CPU always works; CUDA preferred when available)
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 def load_data(path: Path):
     with open(path, "rb") as f:
         data = pickle.load(f)
@@ -80,7 +84,9 @@ def train(
         optimizer_state = None
         completed_steps = 0
 
-    device = config.device
+    # Use portable device (CUDA preferred, CPU fallback); config stores preferred device
+    device = DEVICE  # torch.device("cuda") or torch.device("cpu")
+    config.device = device  # sync config with actual device
     model.to(device)
     model.train()
 

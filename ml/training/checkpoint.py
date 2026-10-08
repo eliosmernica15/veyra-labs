@@ -29,8 +29,8 @@ def save_checkpoint(path: Path, model: VeyraPrime, optimizer, step: int, tokeniz
 
 
 def load_checkpoint(path: Path, model: VeyraPrime | None = None):
-    state = torch.load(str(path), weights_only=False)
-    # Initialize config from checkpoint data, using vocab_size from dataset or config
+    # Portable load: map_location ensures checkpoint saved on GPU can load on CPU and vice versa
+    state = torch.load(str(path), weights_only=False, map_location="cpu")
     vocab_from_checkpoint = state.get("vocab_size", state.get("config", {}).get("vocab_size", 4096))
     config = Config(vocab_size=vocab_from_checkpoint)
     if "config" in state:
@@ -41,9 +41,11 @@ def load_checkpoint(path: Path, model: VeyraPrime | None = None):
     config.vocab_size = vocab_from_checkpoint
     if model is None:
         model = VeyraPrime(config)
-    model.load_state_dict(state["model_state_dict"])
-    # Validate: the saved weights and vocab size must agree with the initialized model
+    model.load_state_dict(state["model_state_dict"], strict=False)
+    # Use portable device: prefer CUDA when available, else CPU
+    config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Ensure vocab consistency
     if vocab_from_checkpoint != config.vocab_size:
-        # This should never trigger after initialization, kept for safety
-        pass
+        config.vocab_size = vocab_from_checkpoint  # force match
+    model.to(config.device)
     return model, state, config

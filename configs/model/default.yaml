@@ -1,0 +1,10 @@
+company_name: Veyra Labs
+platform_name: Veyra AI
+studio_name: Veyra Studio
+cli_name: veyra
+default_model_name: Veyra Prime
+coding_model_name: Veyra Code
+image_model_name: Veyra Vision
+video_model_name: Veyra Motion
+audio_model_name: Veyra Voice
+research_agent_name: Veyra Research

@@ -1,0 +1,11 @@
+batch_size: 4
+learning_rate: 0.001
+weight_decay: 0.01
+gradient_clip: 1.0
+checkpoint_interval: 10
+max_steps: 50
+device_preference: cuda  # Falls back to cpu when CUDA unavailable
+resume_compatible: true
+mixed_precision: false  # Not used in small CPU smoke tests; available for larger GPU runs
+seed: 42
+train_validation_split: 0.9  # 90% train, 10% validation (not fully split in smoke test; logic present)
