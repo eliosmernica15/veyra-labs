@@ -108,11 +108,25 @@ def generate(req: GenerateRequest):
             raise HTTPException(status_code=404, detail="No checkpoint found in " + str(CHECKPOINT_DIR))
         latest = files[0]
         model, state, config = load_checkpoint(latest)
-        tokenizer = load_tokenizer(TOKENIZER_PATH) if TOKENIZER_PATH.exists() else None
-        if tokenizer is None:
-            raise HTTPException(status_code=404, detail="Tokenizer not found: " + str(TOKENIZER_PATH))
+        recorded_tokenizer = state.get("tokenizer_path")
+        tokenizer_override = os.getenv("VEYRA_TOKENIZER_PATH")
+        if recorded_tokenizer and tokenizer_override:
+            if Path(recorded_tokenizer).resolve() != Path(tokenizer_override).resolve():
+                raise HTTPException(status_code=409, detail="Configured tokenizer does not match the checkpoint")
+        tokenizer_path = Path(tokenizer_override or recorded_tokenizer or TOKENIZER_PATH)
+        if not tokenizer_path.exists():
+            raise HTTPException(status_code=404, detail="Tokenizer not found: " + str(tokenizer_path))
+        tokenizer = load_tokenizer(tokenizer_path)
+        if tokenizer.get_vocab_size() != config.vocab_size:
+            raise HTTPException(status_code=409, detail="Tokenizer vocabulary does not match the checkpoint")
+        eos_token_id = tokenizer.token_to_id("</s>")
+        pad_token_id = tokenizer.token_to_id("<pad>")
+        if eos_token_id is None or pad_token_id is None:
+            raise HTTPException(status_code=409, detail="Tokenizer must define </s> and <pad> tokens")
         import torch
-        encoding = tokenizer.encode(req.prompt)
+        encoding = tokenizer.encode(req.prompt, add_special_tokens=False)
+        if not encoding.ids:
+            raise HTTPException(status_code=422, detail="Prompt produced no input tokens")
         input_ids = torch.tensor([encoding.ids], dtype=torch.long)
         model.eval()
         with torch.no_grad():
@@ -123,6 +137,8 @@ def generate(req: GenerateRequest):
                 top_k=req.top_k,
                 top_p=req.top_p,
                 seed=req.seed,
+                eos_token_id=eos_token_id,
+                pad_token_id=pad_token_id,
             )
         text = tokenizer.decode(output_ids[0].tolist())
         return {
@@ -132,6 +148,8 @@ def generate(req: GenerateRequest):
             "output": text,
             "settings": req.model_dump(),
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error(f"Generate error: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))

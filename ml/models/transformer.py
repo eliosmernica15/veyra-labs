@@ -174,10 +174,19 @@ class VeyraPrime(nn.Module):
 
     def generate(self, idx: torch.Tensor, max_new_tokens: int = 20,
                  temperature: float = 1.0, top_k: int | None = 50,
-                 top_p: float = 1.0, seed: int | None = None) -> torch.Tensor:
+                 top_p: float = 1.0, seed: int | None = None,
+                 eos_token_id: int | None = None,
+                 pad_token_id: int | None = None) -> torch.Tensor:
         """Autoregressive generation from trained weights. Real inference."""
+        if temperature <= 0:
+            raise ValueError("temperature must be greater than zero")
+        if eos_token_id is not None and not 0 <= eos_token_id < self.config.vocab_size:
+            raise ValueError(f"eos_token_id must be in [0, {self.config.vocab_size})")
+        if pad_token_id is not None and not 0 <= pad_token_id < self.config.vocab_size:
+            raise ValueError(f"pad_token_id must be in [0, {self.config.vocab_size})")
         if seed is not None:
             torch.manual_seed(seed)
+        finished = torch.zeros(idx.shape[0], dtype=torch.bool, device=idx.device)
         for _ in range(max_new_tokens):
             # Crop to context window
             idx_cond = idx if idx.shape[1] <= self.config.context_length else idx[:, -self.config.context_length:]
@@ -208,24 +217,38 @@ class VeyraPrime(nn.Module):
                         logits[b, delete_indices] = float("-inf")
             probs = F.softmax(logits, dim=-1)
             next_token = torch.multinomial(probs, num_samples=1)  # (B, 1)
+            if eos_token_id is not None:
+                fill_token_id = eos_token_id if pad_token_id is None else pad_token_id
+                fill = torch.full_like(next_token, fill_token_id)
+                next_token = torch.where(finished.unsqueeze(1), fill, next_token)
+                finished |= next_token.squeeze(1).eq(eos_token_id)
             idx = torch.cat([idx, next_token], dim=1)
-            # Optional: stop on EOS token if vocabulary includes it (not enforced by default)
+            if eos_token_id is not None and torch.all(finished):
+                break
         return idx
 
     def compute_loss(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         x, y = batch
+        if x.ndim != 2 or y.ndim != 2:
+            raise ValueError(f"Expected 2D input and target tensors, got {x.ndim}D and {y.ndim}D")
+        if x.shape != y.shape:
+            raise ValueError(f"Input and target shapes must match after shifting, got {tuple(x.shape)} and {tuple(y.shape)}")
+        if y.numel() == 0:
+            raise ValueError("Target tensor must not be empty")
+        if not torch.any(y != -1):
+            raise ValueError("Target tensor must contain at least one non-ignored label")
+        invalid_labels = (y != -1) & ((y < 0) | (y >= self.config.vocab_size))
+        if torch.any(invalid_labels):
+            raise ValueError(f"Targets must be -1 or token IDs in [0, {self.config.vocab_size})")
+
         logits = self.forward(x)
-        # Shift for next-token prediction: logits[:, :-1] vs y[:, 1:] if aligned,
-        # but we assume x and y are already aligned: x=sequence[:-1], y=sequence[1:]
-        B, T, V = logits.shape
-        # Causal next-token: predict token at position i+1 from position i
-        # If y is already next-token targets aligned with x, use direct; else shift
-        # For continuous sequences (pretraining): x=seq[:T-1], y=seq[1:] -> logits[:, :-1] vs y
-        if y.size(1) == logits.size(1) - 1:
-            loss = F.cross_entropy(logits[:, :-1, :].reshape(-1, V), y.reshape(-1), ignore_index=-1, reduction="mean")
-        else:
-            loss = F.cross_entropy(logits.reshape(B * T, V), y.reshape(B * T), ignore_index=-1, reduction="mean")
-        return loss
+        _, _, vocab_size = logits.shape
+        return F.cross_entropy(
+            logits.reshape(-1, vocab_size),
+            y.reshape(-1),
+            ignore_index=-1,
+            reduction="mean",
+        )
 
     @property
     def device(self) -> torch.device:

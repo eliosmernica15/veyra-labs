@@ -1,0 +1,60 @@
+{
+  "manifest_version": 1,
+  "research_date": "2026-10-10",
+  "status": "research_only_no_source_text_acquired",
+  "acquisition_note": "Wikisource page-content requests returned HTTP 429. No text was downloaded, hashed, cleaned, or included in a dataset.",
+  "policy_references": [
+    {
+      "title": "Wikisource Copyright policy",
+      "url": "https://en.wikisource.org/wiki/Wikisource:Copyright_policy",
+      "finding": "Wikisource requires rights assertions at the source/work level; verify the exact work and jurisdiction before reuse."
+    },
+    {
+      "title": "Creative Commons Attribution-ShareAlike 4.0 International",
+      "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "legal_code_url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt",
+      "finding": "The license permits sharing and adaptation subject to attribution and ShareAlike conditions; determine dataset and model-artifact obligations before distribution."
+    },
+    {
+      "title": "MediaWiki API etiquette",
+      "url": "https://www.mediawiki.org/wiki/API:Etiquette",
+      "finding": "Respect API request guidance and rate limits; do not retry while the API is returning HTTP 429."
+    },
+    {
+      "title": "Project Gutenberg Terms of Use",
+      "url": "https://www.gutenberg.org/policy/terms_of_use.html",
+      "finding": "The main site warns against automated bulk access and directs bulk use to mirrors; no Project Gutenberg text was acquired."
+    }
+  ],
+  "candidates": [
+    {
+      "source_id": "enwikisource-mystery-tales-tell-tale-heart",
+      "title": "The Tell-Tale Heart",
+      "author": "Edgar Allan Poe",
+      "work_first_published": "1843",
+      "page_url": "https://en.wikisource.org/wiki/Mystery_Tales_of_Edgar_Allan_Poe/The_Tell-Tale_Heart",
+      "api_url": "https://api.wikimedia.org/core/v1/wikisource/en/page/Mystery_Tales_of_Edgar_Allan_Poe%2FThe_Tell-Tale_Heart",
+      "observed_revision_id": "16279506",
+      "observed_revision_timestamp": "2026-09-05T22:20:54Z",
+      "observed_page_license": "CC BY-SA 4.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "license_evidence_url": "https://en.wikisource.org/wiki/Wikisource:Copyright_policy",
+      "work_rights_evidence": "The page identifies Poe and the 1843 publication; a public-domain assertion was observed in the source page material. Confirm the exact edition and jurisdiction-specific status before use.",
+      "rights_status": "candidate_pending_human_jurisdiction_review",
+      "source_version": "Wikisource revision 16279506",
+      "acquired_on": null,
+      "downloaded": false,
+      "file_sha256": null,
+      "excluded_from_training_data": true,
+      "exclusion_reason": "Page-content requests returned HTTP 429; no document text was acquired or locally reviewed."
+    }
+  ],
+  "dataset_status": {
+    "pretraining": "not_created_no_source_documents_passed_rights_review",
+    "instruction_response": "separate_pipeline_only_no_new_instruction_targets_acquired",
+    "document_count": 0,
+    "token_count": 0,
+    "tokenizer_identity": null,
+    "train_validation_test_splits": null
+  }
+}
