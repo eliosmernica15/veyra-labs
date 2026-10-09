@@ -22,7 +22,7 @@ RESEARCH_AGENT = os.getenv("VEYRA_RESEARCH_AGENT", "Veyra Research")
 
 AGENT_ENABLED = os.getenv("VEYRA_AGENT_ENABLED", "false").lower() in ("true", "1", "yes")
 AGENT_AUTONOMOUS_EXECUTION = False  # Disabled in Phase 3; must remain False until Phase 4 security
-AGENT_MOCK_ONLY = True  # Phase 3 framework testing uses mock/stub executions only
+AGENT_MOCK_ONLY = False  # Phase 5: real restricted execution enabled (not autonomous)
 AGENT_AUDIT_ENABLED = True
 AGENT_MAX_ITERATIONS = int(os.getenv("VEYRA_AGENT_MAX_ITERATIONS", "10"))
 AGENT_TIMEOUT_SECONDS = float(os.getenv("VEYRA_AGENT_TIMEOUT_SECONDS", "300"))

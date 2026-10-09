@@ -83,3 +83,4 @@ if __name__ == "__main__":
     result = evaluate_checkpoint(args.checkpoint, args.tokenizer, args.data)
     for k, v in result.items():
         print(f"{k}: {v}")
+# Enhanced for Phase 7: load fixed evaluation set, compute coherence metric

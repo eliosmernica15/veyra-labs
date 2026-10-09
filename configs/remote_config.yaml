@@ -1,0 +1,10 @@
+remote_training:
+  data_path: datasets/processed/train.pkl
+  tokenizer_path: datasets/processed/tokenizer.json
+  output_dir: checkpoints/
+  steps: 50
+  batch_size: 4
+  accumulation_steps: 1
+  mixed_precision: true  # Enable when remote CUDA confirmed
+  resume_from: null
+  # Note: same train_loop code runs locally (CPU) and remotely (CUDA) unchanged

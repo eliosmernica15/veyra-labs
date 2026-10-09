@@ -1,0 +1,89 @@
+# Veyra-002 — Proposed substantial experiment (READY, NOT EXECUTED — no free GPU available)
+# Identity: New model separate from Veyra-000 (baseline) and Veyra-001 (verification smoke)
+# Status: CONFIG READY — requires remote GPU (free T4/Colab/Kaggle or approved paid GPU) before execution
+# Purpose: First genuinely meaningful pretraining after verification pipeline confirmed
+
+model_id: Veyra-002
+model_version: v2.0-proposed-2026-10-09
+parent_reference: Veyra-000 (checkpoint_final.pt) + Veyra-001 smoke (checkpoints/veyra001_smoke.pt)
+experiment_id: phase9-veyra002 (pending GPU approval)
+
+status: PROPOSED — NOT EXECUTED. No GPU available from workspace. Free T4/Colab not accessible without auth/runner. Paid GPU requires explicit approval with estimates.
+
+architecture:
+  type: decoder-only-transformer
+  vocab_size: 4096  # target; requires larger corpus for material training
+  embed_dim: 512
+  num_layers: 8
+  num_heads: 8
+  hidden_dim: 2048
+  context_length: 512  # longer context for more capable reasoning/coding
+  positional_encoding: rotary
+  normalization: layernorm
+  dropout: 0.1  # regularization for larger model
+  activation: gelu
+
+scaling_path:
+  Veyra-001: vocab 200, embed 256, layers 4, heads 4, hidden 1024, ctx 128 (~3.2M params) — verification only
+  Veyra-002: vocab 4096, embed 512, layers 8, heads 8, hidden 2048, ctx 512 (~45-60M params estimated) — proposed substantial
+  Veyra-003+: vocab 8192+, embed 1024+, layers 12+, heads 16+, hidden 4096+, ctx 1024+ — future scaling path
+
+parameter_estimate:
+  embedding: 4096 * 512 = 2,097,152
+  positional: 512 * 512 = 262,144
+  layer_approx_per_layer: ~8-10M (8 heads, 512 dim, 2048 hidden, 8 layers => ~8 * ~5-7M ~40-56M total layers)
+  output_projection: 512 * 4096 = 2,097,152
+  total_estimated: ~45-60M (exact computed on GPU init)
+  note: materially larger than 564K (Veyra-000) and 3.2M (Veyra-001 verification)
+
+dataset:
+  proposed_version: veyra002-v1.0-proposed
+  proposed_source: Synthetic original + public-domain text + user-created (license verified)
+  proposed_docs_target: 10,000 - 50,000 (vs current 109)
+  proposed_train_split: 90/10
+  proposed_tokenizer_target: 4096 vocab
+  preprocessor_version: v2.0 (ByteLevel preserved from Phase 6)
+  deduplication: exact + near-duplicate detection (practical for larger corpus)
+
+training_config_proposed:
+  optimizer: AdamW
+  lr: 1e-3 (with cosine decay / warmup if needed)
+  weight_decay: 0.01
+  gradient_clip: 1.0
+  batch_size: 4
+  accumulation_steps: 2-4 (scales with GPU memory)
+  mixed_precision: true (CUDA amp — only when GPU confirmed)
+  steps_target: 500 - 1000 (substantial; not smoke)
+  checkpoint_interval: 50
+  validation_interval: 50
+  resume_capable: true
+
+free_environment_plan:
+  source: Kaggle Notebooks (free T4 x2 ~16GB VRAM each, total ~32GB) OR Google Colab (free T4 ~16GB)
+  required_for_model: 45-60M params, batch 4, ctx 512, fp16 => ~8-12GB VRAM estimated; fits in single T4 with accumulation
+  distributed: Not needed for first substantial run (single GPU sufficient)
+  expected_throughput: ~500-1500 tokens/sec on T4 (depends on batch, sequence length, implementation)
+  session_limit: Kaggle ~9 hours/session; Colab ~12 hours/session (free tier); may need resume/checkpoint strategy
+  dataset_storage: ~1-2GB (50k docs, tokenized); checkpoint storage ~200-400MB per checkpoint (45-60M params + optimizer state)
+  dataset_transfer: Need to upload to Kaggle/Colab or use external storage (Google Drive / Kaggle dataset)
+  cost_if_free: $0
+  cost_if_paid: Would require explicit approval with GPU type, count, VRAM, runtime, storage, transfer, checkpoint estimates
+
+verification_plan_before_start:
+  1. Confirm GPU available and CUDA active (torch.cuda.is_available())
+  2. Confirm model initializes on GPU without OOM
+  3. Confirm dataset loads and tokenizer encode/decode works at 4096 vocab
+  4. Confirm 1-step forward + backward succeeds with mixed_precision=True
+  5. Confirm checkpoint saves/loads correctly with GPU state
+  6. Confirm 5-step smoke on GPU runs (real optimization, real weight change)
+  7. THEN begin substantial training (500-1000 steps) with periodic validation
+  8. Document every step honestly — no hidden failure, no fabricated metrics
+
+security:
+  AGENT_AUTONOMOUS_EXECUTION: False
+  workspace_sandbox: preserved
+  no_autonomous_execution: true
+  approval_gate: user must approve both GPU environment and experiment start
+  no_phase_10: true
+
+status: PROPOSED — READY FOR GPU APPROVAL. NOT EXECUTED. STOP maintained until GPU obtained and explicitly approved.

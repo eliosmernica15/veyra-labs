@@ -1,0 +1,63 @@
+# Veyra Labs — Git ignore rules (backup-safe, $0, no secrets)
+# Based on backup mission requirements (docs/GITHUB_BACKUP_REPORT.md)
+
+# Secrets (must never commit; verify .env excluded)
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Python caches and compiled artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+venv3/
+env/
+env3/
+.venv/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary / generated build outputs
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Local session / memory / agent workspace (not project source)
+.agent_memory/
+.claude/
+.agent_state/
+
+# Large model checkpoints — NOT uploaded (LFS quota / $0 safeguard per backup mission)
+# Checkpoint files remain local with verified SHA-256; source and docs backed up.
+checkpoints/*.pt
+checkpoints/**/*.pt
+
+# Training runs / temporary outputs (unless intentionally preserved as reports)
+logs/*.log
+logs/temp_*
+runs/*.json
+runs/temporary_*
+
+# Unrelated personal / download files
+downloads/
+downloads_*/
+*.tar.gz
+*.zip
+
+# Note: docs/, ml/, agent/, apps/, tests/, datasets/processed/tokenizer_*.json,
+# and dataset preparation code ARE intended for backup and are NOT excluded.

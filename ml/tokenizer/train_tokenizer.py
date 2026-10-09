@@ -6,7 +6,7 @@ import argparse
 import os
 from pathlib import Path
 
-from tokenizers import Tokenizer, models, trainers, pre_tokenizers, processors
+from tokenizers import Tokenizer, models, trainers, pre_tokenizers, processors, decoders
 
 
 def train_tokenizer(raw_path: Path, vocab_size: int = 4096) -> Tokenizer:
@@ -25,7 +25,9 @@ def train_tokenizer(raw_path: Path, vocab_size: int = 4096) -> Tokenizer:
     train_file.write_text(text, encoding="utf-8")
 
     tokenizer = Tokenizer(models.BPE())
-    tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+    tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel()
+    tokenizer.decoder = decoders.ByteLevel()
+    tokenizer.post_processor = processors.ByteLevel(add_prefix_space=True)
     tokenizer.processor = processors.TemplateProcessing(
         single="$A </s>",
         pair="$A </s> $B </s>",

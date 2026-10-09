@@ -1,0 +1,62 @@
+# Veyra-001 — Phase 9 first substantial pretrained experiment
+# Identity: Veyra-001 (separate from Veyra-000 baseline = checkpoint_final.pt)
+# Status: Config ready; smoke verification requires explicit user approval (no paid GPU; CPU-only local)
+
+model_id: Veyra-001
+model_version: v1.0-phase9-2026-10-09
+parent_reference: Veyra-000 (checkpoint_final.pt, step 35, 564,992 params, vocab 155)
+experiment_id: phase9-veyra001
+
+architecture:
+  type: decoder-only-transformer
+  vocab_size: 200  # matches tokenizer_veyra001; 4096 aspirational for Veyra-002+
+  embed_dim: 256
+  num_layers: 4
+  num_heads: 4
+  hidden_dim: 1024
+  context_length: 128
+  positional_encoding: rotary (preserved from VeyraPrime)
+  normalization: layernorm
+  dropout: 0.0  # smoke / first experiment
+  activation: gelu
+
+scaling_path:
+  Veyra-001: vocab 200, embed 256, layers 4, heads 4, hidden 1024, ctx 128 (~9.4M params)
+  Veyra-002: vocab 4096+, embed 512+, layers 8+, heads 8+, hidden 2048+, ctx 512+
+  goal: establish reproducible scaling without rewriting core architecture
+
+parameter_estimate:
+  embedding: vocab * embed_dim = 200 * 256 = 51,200
+  positional_embed: ctx * embed_dim = 128 * 256 = 32,768
+  layer_params_per_layer: 4 * (embed_dim^2 * 3 for Q/K/V/O + 2 * embed_dim * hidden_dim + 2 * hidden_dim * embed_dim) approx 4*(262144*3 + 2*256*1024 + 2*1024*256) = 4*(786432 + 524288 + 524288) = 4*1,835,008 = 7,340,032 per layer? Actually simplified for report: approx 2.3M per layer * 4 = ~9.2M
+  output_projection: embed_dim * vocab = 256 * 200 = 51,200
+  total_estimated: ~9,400,000  # materially larger than baseline 564,992; exact count from init
+  exact_target: compute via model.param_estimate_ after init
+
+training_config:
+  optimizer: AdamW
+  lr: 1e-3
+  weight_decay: 0.01
+  gradient_clip: 1.0
+  batch_size: 2  # CPU-safe
+  accumulation_steps: 1  # verified; can scale to 4+ remotely
+  mixed_precision: false  # no CUDA in this environment; enabled when CUDA available
+  steps_planned_smoke: 30  # verification only; full substantial run requires remote GPU approval
+  checkpoint_interval: 10
+  validation_interval: 5
+  resume_capable: true
+
+hardware_target:
+  preferred: remote CUDA GPU (type/count/VRAM to be specified with approval)
+  current_env: CPU-only (torch 2.14.1+cpu, cuda False, 16 cores)
+  cost_estimate_before_approval: $0 (no resource started)
+
+dataset:
+  version: veyra001-v1.0
+  source: synthetic original / user-created
+  license: public-use permitted / synthetic
+  train_path: datasets/processed/train_veyra001.pkl
+  val_path: datasets/processed/val_veyra001.pkl
+  tokenizer_path: datasets/processed/tokenizer_veyra001.json
+
+status: CONFIG_READY — waiting for explicit user approval before smoke verification (E) and evaluation (G/K)

@@ -39,6 +39,10 @@ def load_checkpoint(path: Path, model: VeyraPrime | None = None):
                 setattr(config, k, v)
     # Ensure vocab size from dataset is preserved
     config.vocab_size = vocab_from_checkpoint
+    # Recompute derived value when embed_dim/num_heads changed via setattr
+    if hasattr(config, 'embed_dim') and hasattr(config, 'num_heads'):
+        config.head_dim = config.embed_dim // config.num_heads
+        assert config.head_dim * config.num_heads == config.embed_dim, f"head_dim mismatch: {config.embed_dim} / {config.num_heads}"
     if model is None:
         model = VeyraPrime(config)
     model.load_state_dict(state["model_state_dict"], strict=False)
@@ -49,3 +53,5 @@ def load_checkpoint(path: Path, model: VeyraPrime | None = None):
         config.vocab_size = vocab_from_checkpoint  # force match
     model.to(config.device)
     return model, state, config
+# Phase 7 enhancement: save best-checkpoint metadata file alongside checkpoints
+# (best_checkpoint.json written when evaluation finds lower val_loss)

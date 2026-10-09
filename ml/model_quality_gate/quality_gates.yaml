@@ -1,0 +1,42 @@
+# Phase 7 Model Quality Gates — Fixed prompts/tasks, actual measured outputs
+# Baseline: checkpoint_final.pt (step 35, vocab=155, ~565k params, smoke-test only)
+# Every gate uses fixed input; outputs measured and stored; no fabrication.
+
+gates:
+  1_tokenizer_correctness:
+    task: "Tokenizer roundtrip + coherent decode"
+    fixed_input: "The quick brown fox jumps over the lazy dog."
+    measure: decode contains expected words; not broken fragments
+    baseline_expected: coherent (post-Phase-6 ByteLevel fix)
+  2_coherent_text_generation:
+    task: "Generate from fixed prompt with fixed seed, measure output length/autoregressive coherence"
+    fixed_prompt: "The quick brown fox"
+    fixed_seed: 42
+    measure: output non-empty; contains words; not garbage tokens
+  3_basic_language_understanding:
+    task: "Fixed sentence completion / sentiment-like task"
+    fixed_input: "The sun rises in the east and"
+    measure: continuation coherent; not random fragments
+  4_basic_instruction_following:
+    task: "Fixed instruction format (no full model capability expected)"
+    fixed_input: "Complete the sentence: Water boils at"
+    measure: completion contains "one hundred" or "100" or coherent continuation
+  5_basic_factual_qa:
+    task: "Fixed factual question"
+    fixed_input: "What is the capital of France?"
+    measure: contains "Paris" or coherent answer
+  6_basic_coding_ability:
+    task: "Fixed code snippet completion"
+    fixed_input: "def add(a,b):\n    return"
+    measure: completes with " a + b" or equivalent
+  7_advanced_reasoning:
+    task: "Fixed analogy / logic"
+    fixed_input: "If all roses are flowers, and some flowers fade, then"
+    measure: continuation logical; not random
+  8_agent_tool_use_capability:
+    task: "Fixed tool-use instruction (infrastructure only — no autonomous execution)"
+    fixed_input: "Read file tests/demo_phase6/calculator.py and report its functions."
+    measure: framework responds with correct file info; not self-approving
+    note: Agent autonomous execution remains FALSE; this gate verifies framework integrity only
+
+baseline_note: "The 565k smoke-test model should remain documented as baseline only. Improvements must show across fixed gates with actual outputs; not declared from params or loss alone."

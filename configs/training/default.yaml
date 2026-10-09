@@ -1,11 +1,18 @@
+# Phase 7 — Default training configuration
+vocab_size: 4096
+context_length: 128
+embed_dim: 128
+num_layers: 4
+num_heads: 4
+hidden_dim: 256
+dropout: 0.1
 batch_size: 4
-learning_rate: 0.001
+lr: 0.001
 weight_decay: 0.01
-gradient_clip: 1.0
+grad_clip: 1.0
+steps: 50
 checkpoint_interval: 10
-max_steps: 50
-device_preference: cuda  # Falls back to cpu when CUDA unavailable
-resume_compatible: true
-mixed_precision: false  # Not used in small CPU smoke tests; available for larger GPU runs
-seed: 42
-train_validation_split: 0.9  # 90% train, 10% validation (not fully split in smoke test; logic present)
+accumulation_steps: 1
+mixed_precision: false
+# Note: dataset is synthetic/small for smoke tests; larger datasets for Phase 8
+# Note: remote GPU portability preserved (DEVICE auto-detects CUDA)

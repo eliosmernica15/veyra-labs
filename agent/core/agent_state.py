@@ -30,6 +30,7 @@ class AgentTask:
     max_iterations: int = 10
     timeout_seconds: float = 300.0  # 5 minutes default per agent loop
     permission_level: str = "restricted"  # restricted | standard | elevated (Phase 4 to enforce)
+    mock_only: bool = True  # Phase 5: False for real restricted execution; True for framework/mocking
     created_at: float = field(default_factory=lambda: time.time())
     updated_at: float = field(default_factory=lambda: time.time())
     result: Optional[Dict[str, Any]] = None
@@ -39,6 +40,8 @@ class AgentTask:
     authorized_action: Optional[Dict[str, Any]] = None
     executed_action: Optional[Dict[str, Any]] = None
     verified_result: Optional[Dict[str, Any]] = None
+    multi_step_state: Optional[str] = None  # Phase 6: explicit multi-step task state
+    state_history: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

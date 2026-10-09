@@ -21,6 +21,8 @@ logger = logging.getLogger("veyra.training")
 # Detect best available device for portability (CPU always works; CUDA preferred when available)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+SCALER_AVAILABLE = torch.cuda.is_available()
+
 
 def load_data(path: Path):
     with open(path, "rb") as f:
@@ -39,8 +41,13 @@ def train(
     weight_decay: float = 0.01,
     grad_clip: float = 1.0,
     checkpoint_interval: int = 10,
+    accumulation_steps: int = 1,
+    mixed_precision: bool = False,
     resume_from: Path | None = None,
 ):
+    tokens_seen = 0
+    total_optimizer_steps = 0
+    losses = []
     # Load dataset first to get vocab size
     samples, tokenizer_path, vocab_size = load_data(data_path)
     if not samples:
@@ -59,11 +66,18 @@ def train(
                     setattr(config, k, v)
         # Preserve vocab size from dataset if different
         config.vocab_size = vocab_size
+        # Recompute derived value when config changed via setattr
+        if hasattr(config, 'embed_dim') and hasattr(config, 'num_heads'):
+            config.head_dim = config.embed_dim // config.num_heads
+            assert config.head_dim * config.num_heads == config.embed_dim
         model = VeyraPrime(config)
         model.load_state_dict(state["model_state_dict"])
         optimizer_state = state.get("optimizer_state_dict", None)
         completed_steps = state.get("step", 0)
-        logger.info(f"Resumed at step {completed_steps}")
+        tokens_seen = state.get("tokens_seen", 0)
+        total_optimizer_steps = state.get("optimizer_steps", 0)
+        losses = state.get("losses", []) if state.get("losses") is not None else []
+        logger.info(f"Resumed at step {completed_steps}, tokens {tokens_seen}, optimizer_steps {total_optimizer_steps}")
     elif model_path and model_path.exists():
         logger.info(f"Loading model from {model_path}")
         state = torch.load(str(model_path), weights_only=False)
@@ -73,10 +87,17 @@ def train(
                 if hasattr(config, k):
                     setattr(config, k, v)
         config.vocab_size = vocab_size
+        # Recompute derived value when config changed via setattr
+        if hasattr(config, 'embed_dim') and hasattr(config, 'num_heads'):
+            config.head_dim = config.embed_dim // config.num_heads
+            assert config.head_dim * config.num_heads == config.embed_dim
         model = VeyraPrime(config)
         model.load_state_dict(state["model_state_dict"])
         completed_steps = state.get("step", 0)
         optimizer_state = state.get("optimizer_state_dict", None)
+        tokens_seen = state.get("tokens_seen", 0)
+        total_optimizer_steps = state.get("optimizer_steps", 0)
+        losses = state.get("losses", []) if state.get("losses") is not None else []
     else:
         logger.info("Initializing new model from scratch.")
         config = Config(vocab_size=vocab_size)
@@ -94,6 +115,12 @@ def train(
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     if optimizer_state is not None:
         optimizer.load_state_dict(optimizer_state)
+    scaler = torch.cuda.amp.GradScaler() if (mixed_precision and torch.cuda.is_available()) else None
+    use_amp = mixed_precision and torch.cuda.is_available()
+    if use_amp:
+        logger.info("Mixed precision enabled (CUDA available).")
+    else:
+        logger.info("Mixed precision disabled (CPU or explicitly disabled).")
 
     # Load dataset
     samples, tokenizer_path, vocab_size = load_data(data_path)
@@ -108,6 +135,7 @@ def train(
 
     start_time = time.time()
     losses = []
+    seq_len = samples[0][0].size(0) if (samples and hasattr(samples[0][0], "size")) else 128
     for step in range(completed_steps, completed_steps + steps):
         # Sample batch
         batch_samples = [samples[i % len(samples)] for i in range(batch_size)]
@@ -116,16 +144,42 @@ def train(
         x_batch = x_batch.to(device)
         y_batch = y_batch.to(device)
 
-        optimizer.zero_grad()
-        loss = model.compute_loss((x_batch, y_batch))
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-        optimizer.step()
+        accumulated_loss = 0.0
+        for accum in range(accumulation_steps):
+            batch_samples = [samples[i % len(samples)] for i in range(batch_size)]
+            x_batch = torch.stack([s[0] for s in batch_samples])
+            y_batch = torch.stack([s[1] for s in batch_samples])
+            x_batch = x_batch.to(device)
+            y_batch = y_batch.to(device)
 
-        loss_val = loss.item()
+            optimizer.zero_grad() if accum == 0 else None
+            if use_amp:
+                with torch.cuda.amp.autocast():
+                    loss = model.compute_loss((x_batch, y_batch))
+                scaler.scale(loss).backward()
+            else:
+                loss = model.compute_loss((x_batch, y_batch))
+                loss.backward()
+            accumulated_loss += loss.item()
+
+            if (accum + 1) == accumulation_steps:
+                if use_amp:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                    optimizer.step()
+                total_optimizer_steps += 1
+
+        loss_val = accumulated_loss / accumulation_steps
         losses.append(loss_val)
+        tokens_seen += batch_size * seq_len * accumulation_steps
         if (step + 1) % max(1, steps // 10) == 0 or step == completed_steps:
-            logger.info(f"Step {step + 1} — loss: {loss_val:.4f} — elapsed: {time.time() - start_time:.1f}s")
+            elapsed = time.time() - start_time
+            logger.info(
+                f"Step {step + 1} - loss: {loss_val:.4f} - tokens: {tokens_seen} "
+                f"- optimizer_steps: {total_optimizer_steps} - elapsed: {elapsed:.1f}s"
+            )
 
         if (step + 1) % checkpoint_interval == 0:
             checkpoint_path_final = output_dir / f"checkpoint_step_{step + 1}.pt"
@@ -134,6 +188,8 @@ def train(
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "step": step + 1,
+                "optimizer_steps": total_optimizer_steps,
+                "tokens_seen": tokens_seen,
                 "config": {
                     "vocab_size": config.vocab_size,
                     "context_length": config.context_length,
@@ -145,15 +201,26 @@ def train(
                 "tokenizer_path": tokenizer_path,
                 "vocab_size": vocab_size,
                 "loss": loss_val,
+                "accumulation_steps": accumulation_steps,
+                "mixed_precision": use_amp,
+                "hardware_info": {
+                    "device": str(device),
+                    "cuda_available": torch.cuda.is_available(),
+                    "cuda_device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+                },
+                "wall_time_s": time.time() - start_time,
             }, str(checkpoint_path_final))
             logger.info(f"Checkpoint saved: {checkpoint_path_final}")
 
     # Final checkpoint
+    output_dir.mkdir(parents=True, exist_ok=True)
     final_path = output_dir / "checkpoint_final.pt"
     torch.save({
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
         "step": completed_steps + steps,
+        "optimizer_steps": total_optimizer_steps,
+        "tokens_seen": tokens_seen,
         "config": {
             "vocab_size": config.vocab_size,
             "context_length": config.context_length,
@@ -166,8 +233,16 @@ def train(
         "vocab_size": vocab_size,
         "losses": losses,
         "final_loss": losses[-1] if losses else None,
+        "accumulation_steps": accumulation_steps,
+        "mixed_precision": use_amp,
+        "hardware_info": {
+            "device": str(device),
+            "cuda_available": torch.cuda.is_available(),
+            "cuda_device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        },
+        "wall_time_s": time.time() - start_time,
     }, str(final_path))
-    logger.info(f"Training complete. Final checkpoint: {final_path} (losses: {losses})")
+    logger.info(f"Training complete. Final checkpoint: {final_path} (losses: {len(losses)}, tokens: {tokens_seen}, optimizer_steps: {total_optimizer_steps})")
     return final_path, model, losses
 
 
@@ -178,6 +253,12 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--resume", type=Path, default=None)
+    parser.add_argument("--accumulation-steps", type=int, default=1)
+    parser.add_argument("--mixed-precision", action="store_true", default=False)
     args = parser.parse_args()
-    train(data_path=args.data, steps=args.steps, batch_size=args.batch_size,
-          lr=args.lr, resume_from=args.resume)
+    train(
+        data_path=args.data, steps=args.steps, batch_size=args.batch_size,
+        lr=args.lr, resume_from=args.resume,
+        accumulation_steps=args.accumulation_steps,
+        mixed_precision=args.mixed_precision,
+    )

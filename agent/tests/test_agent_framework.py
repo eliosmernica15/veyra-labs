@@ -149,7 +149,8 @@ def test_validation_result_mock_only():
 def test_config_framework_flags():
     assert AGENT_ENABLED is False  # Default off; framework exists but autonomous execution disabled
     assert AGENT_AUTONOMOUS_EXECUTION is False
-    assert AGENT_MOCK_ONLY is True
+    # Phase 5: AGENT_MOCK_ONLY set to False for real restricted execution
+    assert AGENT_MOCK_ONLY is False  # Phase 5: real execution enabled (not autonomous)
     assert AGENT_MAX_ITERATIONS == 10
     assert AGENT_MAX_ITERATIONS > 0
 

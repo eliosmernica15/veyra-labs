@@ -218,7 +218,13 @@ class VeyraPrime(nn.Module):
         # Shift for next-token prediction: logits[:, :-1] vs y[:, 1:] if aligned,
         # but we assume x and y are already aligned: x=sequence[:-1], y=sequence[1:]
         B, T, V = logits.shape
-        loss = F.cross_entropy(logits.reshape(B * T, V), y.reshape(B * T), ignore_index=-1, reduction="mean")
+        # Causal next-token: predict token at position i+1 from position i
+        # If y is already next-token targets aligned with x, use direct; else shift
+        # For continuous sequences (pretraining): x=seq[:T-1], y=seq[1:] -> logits[:, :-1] vs y
+        if y.size(1) == logits.size(1) - 1:
+            loss = F.cross_entropy(logits[:, :-1, :].reshape(-1, V), y.reshape(-1), ignore_index=-1, reduction="mean")
+        else:
+            loss = F.cross_entropy(logits.reshape(B * T, V), y.reshape(B * T), ignore_index=-1, reduction="mean")
         return loss
 
     @property

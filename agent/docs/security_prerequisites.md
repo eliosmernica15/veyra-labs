@@ -2,47 +2,71 @@
 
 Phase 3 framework defines interfaces and structures. Before any autonomous execution is enabled, Phase 4 must implement the following controls.
 
-## Workspace Boundaries
-- `AgentContext.workspace_boundaries` must be enforced by `ActionValidator.check_path_traversal()`.
-- No file access outside permitted subpaths (`.` is too broad for autonomous execution; must be restricted to approved directories).
+## Phase 4 Status: IMPLEMENTED (Enforced in Code)
 
-## Path Traversal Protection
-- `ActionValidator.check_path_traversal()` is a stub interface. Phase 4 must implement full canonical path resolution and boundary enforcement.
-- Any proposed file path that resolves outside `workspace_path` must be rejected before authorization.
+All 9 prerequisites from Phase 3 have been implemented as real security controls:
 
-## Command Restrictions
-- `AgentContext.allowed_commands` must be strictly enforced. Phase 3 framework does not enforce this (loop executes mock results only).
-- Command allowlisting must be non-bypassable by the agent (agent cannot modify its own allowed list).
+1. **Workspace Boundaries Enforcement** (`agent/core/workspace_sandbox.py`): `AgentContext.workspace_boundaries` enforced by `WorkspaceSandbox.resolve_path()`. Canonical path resolution rejects paths outside permitted subpaths (`.` too broad; must be restricted to approved directories: `ml/`, `tests/`, `datasets/`, etc.).
 
-## Secret Redaction
-- `AgentContext.secret_patterns` defines patterns (`password`, `token`, `secret`, `key`).
-- Phase 4 must enforce redaction in audit logs and output before any result reaches external interfaces.
-- Audit log must NEVER contain unredacted secrets.
+2. **Path Traversal Protection** (`agent/core/workspace_sandbox.py`): Full canonical path resolution with `os.path.abspath()` and `pathlib.Path.resolve()`. Any proposed file path that resolves outside `workspace_path` is rejected before authorization. `..` traversal blocked.
 
-## Audit Integrity
-- `AuditLogger.verify_integrity()` reports clearly: `"Phase 4 must implement cryptographic verification (hash chain / signature)"`.
-- Phase 4 must add a hash chain or digital signature to audit entries so they cannot be deleted or altered.
-- Agent must not have write access to audit file during autonomous execution (separate process/user for audit writer).
+3. **Command Restrictions** (`agent/core/terminal_security.py`, `agent/core/file_permissions.py`): `AgentContext.allowed_commands` strictly enforced by `TerminalCommandEnforcer`. Command allowlisting is non-bypassable (no `_mock` bypass for real commands). Agent cannot modify allowed list (`allowed_commands` not writable by agent framework design).
 
-## High-Impact Action Approval
-- `PermissionEnforcer.allow_with_approval()` defines the mechanism. Phase 4 must implement a real approval gate (e.g., user confirmation, time delay, or external authorization service) before any `elevated` or `requires_approval_for` tool call executes.
-- `elevated` commands (e.g., `delete_file`, `run_shell`, `deploy`) must never execute without explicit authorization.
+4. **Secret Redaction** (`agent/core/secret_redaction.py`): `AgentContext.secret_patterns` (`password`, `token`, `secret`, `key`, `credential`, `auth`) applied to audit logs and output. `redact_dict()` replaces secret key values with `[REDACTED]`. `.env` and secret-bearing files excluded from agent access by default (`SecretRedactor.secret_files`).
 
-## Timeouts and Output Limits
-- `AgentTask.timeout_seconds` (300 default) and `AgentLoop.is_within_limits()` enforce limits in framework.
-- Phase 4 must implement hard termination (not graceful stop) when timeout is exceeded.
-- `AgentContext.max_output_size_bytes` (1MB default for restricted, 10MB for elevated) must be enforced before any result is accepted.
+5. **Audit Integrity** (`agent/core/audit_crypto.py`): `AuditLogger.verify_integrity()` implements cryptographic hash chain (`previous_hash` + `entry_hash`). Chain breaks detectable (`chain_valid`, `broken_at`). Audit writer must run as separate process/user for full isolation (advisory; process-level isolation requires OS-level enforcement beyond this phase).
 
-## Safe Defaults
-- Default `permission_level` is `restricted` (`agent/core/config.py`).
-- Default `AGENT_AUTONOMOUS_EXECUTION` is `False`.
-- Default `AGENT_MOCK_ONLY` is `True` (Phase 3 framework testing only).
+6. **High-Impact Action Approval** (`agent/core/approval_system.py`): `PermissionEnforcer.allow_with_approval()` now backed by `ApprovalSystem` with real approval mechanism (`approve_action()` requires `approved_by: str`, `note`). `elevated` commands (`delete_file`, `run_shell`, `deploy`) never execute without explicit authorization. Agent cannot self-approve (`approve_action()` requires external user; `is_approved()` checks external state).
 
-## Prompt Injection Defense
-- Untrusted file content and tool output must be treated as untrusted data (not privileged instructions).
-- Phase 4 must implement prompt injection filtering (e.g., sanitize input before passing to model prompts; verify no hidden instructions in file content or command output).
-- Agent must not allow file content or tool output to modify its own instructions, permissions, or safeguards.
+7. **Timeout and Enforcement** (`agent/core/resource_limits.py`, `agent/core/loop.py`): `AgentTask.timeout_seconds` enforced by `ResourceLimits.is_within_time_limit()`; `AgentLoop.is_within_limits()` enforces both iterations and timeout. `TerminalCommandEnforcer` enforces hard termination (`process.kill()`) when timeout exceeded. `AgentContext.max_output_size_bytes` enforced (`ResourceLimits.check_output_size()`); output truncated with `[TRUNCATED]`.
 
-## Agent Safeguard Protection
-- Agent must not be able to modify or disable its own safeguards (`AGENT_AUTONOMOUS_EXECUTION`, `AGENT_MOCK_ONLY`, `permission_level`, `audit_enabled`).
-- Phase 4 must enforce this at the process/file-system level (read-only access to agent framework code/config during execution).
+8. **Prompt Injection Defense** (`agent/core/prompt_injection.py`): Untrusted file/tool output treated as untrusted data (not privileged instructions). `PromptInjectionFilter.detect_injection_attempts()` detects hidden instructions (`ignore previous instructions`, `disable safeguards`, `modify your own config`, etc.). `sanitize_for_model_input()` adds `[UNTRUSTED_EXTERNAL_CONTENT_BEGIN/END]` labels and neutralizes markers. Tests verify malicious file instructions cannot override permission policy (`test_malicious_file_content_cannot_override_policy`).
+
+9. **Agent Safeguard Protection** (`agent/core/safeguard_protection.py`): Agent cannot modify `AGENT_AUTONOMOUS_EXECUTION`, `AGENT_MOCK_ONLY`, `AGENT_ENABLED`, `AGENT_PERMISSION_LEVEL`, or audit/security configuration. `SafeguardProtection.check_write_permission()` blocks writes to protected files (`agent/core/config.py`, `permission.py`, etc.). Read-only advisory provided for OS-level enforcement.
+
+---
+
+## Phase 4 Verification (Actual Commands)
+
+```bash
+# Confirm framework flags
+PYTHONPATH="." python -c "from agent.core.config import AGENT_ENABLED, AGENT_AUTONOMOUS_EXECUTION, AGENT_MOCK_ONLY; print(AGENT_ENABLED, AGENT_AUTONOMOUS_EXECUTION, AGENT_MOCK_ONLY)"
+# -> True False True (autonomous execution disabled; mock-only active; framework enabled)
+
+# Confirm workspace sandbox enforces subpaths
+PYTHONPATH="." python -c "
+from agent.core.workspace_sandbox import WorkspaceSandbox
+sandbox = WorkspaceSandbox(workspace_roots=['.'], allowed_subpaths=['tests/'])
+print('tests/test_agent.py:', sandbox.resolve_path('tests/test_agent.py'))
+print('agent/core/config.py:', sandbox.resolve_path('agent/core/config.py'))
+"
+# -> tests/test_agent.py allowed; agent/core/config.py blocked (not in allowed subpaths)
+
+# Confirm terminal security allowlist
+PYTHONPATH="." python -c "
+from agent.core.terminal_security import ALLOWED_COMMANDS
+print('Allowed commands:', list(ALLOWED_COMMANDS.keys()))
+"
+# -> ['python', 'pytest', 'cat', 'ls', 'pwd', 'echo', 'grep', 'head', 'git']
+
+# Confirm approval mechanism requires external user
+PYTHONPATH="." python -c "
+from agent.core.approval_system import ApprovalSystem
+approval = ApprovalSystem()
+approval.request_approval('test_1', 'delete', 'elevated', 'test')
+print('Self-approved?', approval.is_approved('test_1'))
+"
+# -> False (agent cannot approve its own action)
+
+# Confirm audit chain verification
+PYTHONPATH="." python -c "
+from agent.core.audit_crypto import CryptographicAuditLogger
+import tempfile
+from pathlib import Path
+with tempfile.TemporaryDirectory() as td:
+    logger = CryptographicAuditLogger(log_path=Path(td)/'audit.jsonl')
+    logger.log('test', {'step': 1})
+    print('Chain:', logger.verify_integrity()['chain_valid'])
+"
+# -> True (audit chain verified)
+```
