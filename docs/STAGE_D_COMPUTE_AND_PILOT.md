@@ -137,6 +137,6 @@ No additional billing action is currently needed for a bounded job under include
 
 ## Security and next work
 
-- No credentials were shown, rotated, or uploaded. `.env` remains ignored; its historical copy at `ec1eb318733b79ea5bbd114d6220be101325c070` remains a manual remediation. Privately revoke/replace `VEYRA_API_KEY` with its issuer or local service; do not send it in chat.
+- A value-safe inspection of the historical `.env` at `ec1eb318733b79ea5bbd114d6220be101325c070` confirmed `VEYRA_BACKEND_URL` and `VEYRA_API_KEY` match the `.env.example` development placeholders (`localhost` and `local-dev-key`); other differences are training settings. Repository code does not consume `VEYRA_API_KEY`. No provider-issued credential was exposed, so rotation is not applicable. `.env` remains ignored, and Git history was not rewritten.
 - The candidate is preserved but not designated best for assistant quality. No more CPU training is recommended on this laptop.
 - No further training is proposed in this report: the demonstrated free runner is CPU-only and the corpus is narrow. Any future candidate requires a separately reviewed configuration, held-out metrics, actual inference evidence, and preservation of the original best checkpoint. The model still emits incoherent fragments.
