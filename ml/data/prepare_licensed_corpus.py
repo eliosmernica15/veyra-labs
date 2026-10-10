@@ -34,6 +34,11 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _git_blob_sha1(content: bytes) -> str:
+    header = f"blob {len(content)}\0".encode("ascii")
+    return hashlib.sha1(header + content).hexdigest()
+
+
 def _dataset_content_sha256(payload: dict[str, Any]) -> str:
     stable_metadata = {
         key: value for key, value in payload.items()
@@ -176,6 +181,23 @@ def _read_documents(
         if license_id == "Public-Domain" and not str(entry.get("jurisdiction", "")).strip():
             raise ValueError(f"Public-Domain document {index} must record its jurisdiction")
 
+        expected_sha256 = entry.get("source_file_sha256")
+        expected_git_sha1 = entry.get("source_git_blob_sha1")
+        if expected_sha256 is None and expected_git_sha1 is None:
+            raise ValueError(
+                f"Document {index} must pin source_file_sha256 or source_git_blob_sha1"
+            )
+        if expected_sha256 is not None and (
+            not isinstance(expected_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+        ):
+            raise ValueError(f"Document {index} source_file_sha256 must be a lowercase SHA-256 digest")
+        if expected_git_sha1 is not None and (
+            not isinstance(expected_git_sha1, str)
+            or re.fullmatch(r"[0-9a-f]{40}", expected_git_sha1) is None
+        ):
+            raise ValueError(f"Document {index} source_git_blob_sha1 must be a lowercase Git blob SHA-1")
+
         source_path = (root / entry["path"]).resolve()
         if not source_path.is_relative_to(root):
             raise ValueError(f"Document path escapes the manifest directory: {entry['path']}")
@@ -184,6 +206,11 @@ def _read_documents(
         except FileNotFoundError:
             excluded_documents.append({"path": entry["path"], "reason": "missing_source_file"})
             continue
+        actual_sha256 = _sha256(raw_text)
+        if expected_sha256 is not None and actual_sha256 != expected_sha256:
+            raise ValueError(f"Source file SHA-256 mismatch for document {index}: {entry['path']}")
+        if expected_git_sha1 is not None and _git_blob_sha1(raw_text) != expected_git_sha1:
+            raise ValueError(f"Source Git blob SHA-1 mismatch for document {index}: {entry['path']}")
         try:
             text = raw_text.decode("utf-8-sig")
         except UnicodeDecodeError:
@@ -283,7 +310,7 @@ def _read_documents(
             "source_version": entry["source_version"].strip(),
             "acquisition_date": acquisition_date,
             "jurisdiction": entry.get("jurisdiction"),
-            "source_sha256": _sha256(raw_text),
+            "source_sha256": actual_sha256,
             "normalized_content_sha256": content_hash,
             "word_count": len(words),
             "quality_metrics": quality_metrics,

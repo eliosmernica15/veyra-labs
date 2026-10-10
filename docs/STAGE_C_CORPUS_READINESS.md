@@ -1,7 +1,7 @@
 # Stage C Corpus and Training Readiness
 
 **Assessment date:** 2026-10-10
-**Status:** Corpus preparation and training-loop regressions were verified; the bounded 10-step CPU pilot was evaluated; and hosted CPU baseline verification completed. Reviewed code and reports were merged to the private repository. No further training is underway; see [Stage D](./STAGE_D_COMPUTE_AND_PILOT.md) for hosted results.
+**Status:** Corpus preparation and training-loop regressions were verified; the bounded 10-step CPU pilot was evaluated; and hosted CPU baseline verification completed. Follow-up source-integrity checks now reject unpinned or changed source files before preprocessing. No further training is underway; see [Stage D](./STAGE_D_COMPUTE_AND_PILOT.md) for hosted results.
 
 ## Repository preservation and security
 
@@ -33,7 +33,13 @@ The machine-readable source decisions and provenance are in [the source research
 
 ## Corpus construction and measured quality
 
-The reproducible preprocessing implementation is [prepare_licensed_corpus.py](../ml/data/prepare_licensed_corpus.py). It normalizes UTF-8/BOM, line endings, and Unicode NFC; rejects malformed, empty, control-character, and under-20-word documents; removes exact duplicates and near duplicates using a bottom-128 five-word-shingle estimate with a word-count-ratio gate; and assigns whole documents to seeded, disjoint train/validation/test splits. No source text was repeated to inflate counts.
+The reproducible preprocessing implementation is [prepare_licensed_corpus.py](../ml/data/prepare_licensed_corpus.py). Before reading a document, it verifies the file against a declared SHA-256 or pinned Git blob SHA-1; missing pins and content mismatches fail the build rather than silently substituting text. It then normalizes UTF-8/BOM, line endings, and Unicode NFC; rejects malformed, empty, control-character, and under-20-word documents; removes exact duplicates and near duplicates using a bottom-128 five-word-shingle estimate with a word-count-ratio gate; and assigns whole documents to seeded, disjoint train/validation/test splits. No source text was repeated to inflate counts.
+
+### Follow-up: source-file integrity gate
+
+The CPython collector now records a SHA-256 for every extracted document in addition to its upstream Git blob SHA-1. Corpus preparation checks every supplied pin against the exact source bytes before decoding, cleaning, deduplication, or tokenization. Manifests from Git sources may pin the Git blob identity; other sources must provide a lowercase SHA-256. Missing, malformed, or mismatched pins stop the build with an explicit error. The previously acquired CPython manifest remains compatible because each document already contains its pinned Git blob SHA-1; this code change does not rewrite the raw manifest or existing split files.
+
+Regression coverage verifies both Git blob and SHA-256 pins, rejects manifests without either pin, and stops if a source document changes after the manifest is prepared. The focused Stage B/C suites pass **20 tests** (`test_stage_b_c_data.py` and `test_training_validation.py`). No new source was acquired, no corpus artifact was rebuilt, and no pretraining or instruction tuning was run in this follow-up.
 
 The accepted local source set contains:
 

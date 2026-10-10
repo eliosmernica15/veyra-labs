@@ -282,6 +282,9 @@ def test_licensed_corpus_builds_disjoint_reproducible_splits(tmp_path):
         (doc_dir / filename).write_text(_licensed_document(index), encoding="utf-8")
         entries.append({
             "path": f"documents/{filename}",
+            "source_file_sha256": hashlib.sha256(
+                (doc_dir / filename).read_bytes()
+            ).hexdigest(),
             "title": f"Fixture document {index}",
             "source_url": f"https://example.org/fixture/{index}",
             "license": "CC0-1.0",
@@ -292,16 +295,26 @@ def test_licensed_corpus_builds_disjoint_reproducible_splits(tmp_path):
             "rights_basis": "Test-only fixture content",
             "rights_verified": True,
         })
+        if index == 0:
+            entries[-1]["source_git_blob_sha1"] = _git_blob_sha1(
+                (doc_dir / filename).read_bytes()
+            )
     duplicate_entry = dict(entries[0])
     duplicate_entry["path"] = "documents/doc-0.txt"
     entries.append(duplicate_entry)
     short_entry = dict(entries[0])
     short_entry.update({"path": "documents/short.txt", "title": "Too short"})
+    short_entry.pop("source_git_blob_sha1", None)
     (doc_dir / "short.txt").write_text("Too short.", encoding="utf-8")
+    short_entry["source_file_sha256"] = hashlib.sha256(
+        (doc_dir / "short.txt").read_bytes()
+    ).hexdigest()
     entries.append(short_entry)
     malformed_entry = dict(entries[0])
     malformed_entry.update({"path": "documents/malformed.txt", "title": "Malformed UTF-8"})
+    malformed_entry.pop("source_git_blob_sha1", None)
     (doc_dir / "malformed.txt").write_bytes(b"\xff")
+    malformed_entry["source_file_sha256"] = hashlib.sha256(b"\xff").hexdigest()
     entries.append(malformed_entry)
     manifest = tmp_path / "manifest.json"
     manifest.write_text(json.dumps({
@@ -437,6 +450,9 @@ def test_licensed_corpus_rejects_near_duplicates(tmp_path):
         (doc_dir / filename).write_text(text, encoding="utf-8")
         entries.append({
             "path": f"documents/{filename}",
+            "source_file_sha256": hashlib.sha256(
+                (doc_dir / filename).read_bytes()
+            ).hexdigest(),
             "title": f"Fixture document {index}",
             "source_url": f"https://example.org/fixture/{index}",
             "license": "CC0-1.0",
@@ -469,6 +485,50 @@ def test_licensed_corpus_rejects_near_duplicates(tmp_path):
     assert sum("doc-4.txt" in document["path"] for document in documents) == 0
 
 
+def test_licensed_corpus_requires_and_verifies_source_content_hashes(tmp_path):
+    doc_dir = tmp_path / "documents"
+    doc_dir.mkdir()
+    entries = []
+    for index in range(3):
+        path = doc_dir / f"doc-{index}.txt"
+        path.write_text(_licensed_document(index), encoding="utf-8")
+        entries.append({
+            "path": f"documents/{path.name}",
+            "source_file_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "title": f"Fixture document {index}",
+            "source_url": f"https://example.org/fixture/{index}",
+            "license": "CC0-1.0",
+            "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "license_evidence_url": f"https://example.org/fixture/{index}/license",
+            "attribution": "Unit-test fixture",
+            "source_version": "fixture-v1",
+            "rights_basis": "Test-only fixture content",
+            "rights_verified": True,
+        })
+    manifest = tmp_path / "manifest.json"
+
+    entries[0].pop("source_file_sha256")
+    manifest.write_text(json.dumps({
+        "dataset_version": "fixture-v1",
+        "acquisition_date": date.today().isoformat(),
+        "documents": entries,
+    }), encoding="utf-8")
+    with pytest.raises(ValueError, match="must pin source_file_sha256 or source_git_blob_sha1"):
+        prepare_corpus(manifest, TOKENIZER_PATH, tmp_path / "missing_hash", context_length=32)
+
+    entries[0]["source_file_sha256"] = hashlib.sha256(
+        (doc_dir / "doc-0.txt").read_bytes()
+    ).hexdigest()
+    manifest.write_text(json.dumps({
+        "dataset_version": "fixture-v1",
+        "acquisition_date": date.today().isoformat(),
+        "documents": entries,
+    }), encoding="utf-8")
+    (doc_dir / "doc-0.txt").write_text("Changed after rights and provenance review.", encoding="utf-8")
+    with pytest.raises(ValueError, match="Source file SHA-256 mismatch"):
+        prepare_corpus(manifest, TOKENIZER_PATH, tmp_path / "changed_source", context_length=32)
+
+
 def test_cpython_collector_verifies_pinned_git_blob_and_writes_manifest(tmp_path):
     relative_path = "Doc/tutorial/example.rst"
     content = b"An educational example from the pinned documentation.\n"
@@ -490,6 +550,7 @@ def test_cpython_collector_verifies_pinned_git_blob_and_writes_manifest(tmp_path
     assert manifest["source_artifact"]["commit"] == CPYTHON_COMMIT
     assert manifest["source_artifact"]["archive_sha256"]
     assert manifest["documents"][0]["source_git_blob_sha1"] == _git_blob_sha1(content)
+    assert manifest["documents"][0]["source_file_sha256"] == hashlib.sha256(content).hexdigest()
     assert manifest["documents"][0]["rights_verified"] is True
     assert (tmp_path / "collected" / "sources" / relative_path).read_bytes() == content
 
