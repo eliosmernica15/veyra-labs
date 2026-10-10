@@ -10,6 +10,7 @@ import torch
 from ml.models.transformer import VeyraPrime, Config
 from ml.training.checkpoint import load_checkpoint
 from ml.tokenizer.train_tokenizer import load_tokenizer
+from ml.path_utils import resolve_portable_path
 
 
 def generate_text(
@@ -25,8 +26,8 @@ def generate_text(
     model, state, config = load_checkpoint(checkpoint_path)
     checkpoint_tokenizer_path = state.get("tokenizer_path")
     if checkpoint_tokenizer_path:
-        checkpoint_tokenizer_path = Path(checkpoint_tokenizer_path)
-        if tokenizer_path is not None and tokenizer_path.resolve() != checkpoint_tokenizer_path.resolve():
+        checkpoint_tokenizer_path = resolve_portable_path(checkpoint_tokenizer_path)
+        if tokenizer_path is not None and resolve_portable_path(tokenizer_path).resolve() != checkpoint_tokenizer_path.resolve():
             raise ValueError("The requested tokenizer does not match the checkpoint's recorded tokenizer")
         tokenizer_path = checkpoint_tokenizer_path
     if tokenizer_path is None:
