@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from datetime import date
+import hashlib
 import json
 import pickle
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from zipfile import ZipFile
 
 import pytest
 import torch
 from tokenizers import Tokenizer
 
+from ml.data.collect_cpython_docs import CPYTHON_COMMIT, _git_blob_sha1, collect_cpython_docs
 from ml.data.prepare_licensed_corpus import prepare_corpus
 from ml.inference.generate import generate_text
 from ml.instruction_tuning.prepare_instruction_data import _encode_sample, prepare
@@ -211,7 +214,7 @@ def test_generate_text_uses_checkpoint_tokenizer_without_prompt_eos(monkeypatch)
             return input_ids
 
     model = CapturingModel()
-    state = {"step": 100, "tokenizer_path": str(TOKENIZER_PATH)}
+    state = {"step": 100, "tokenizer_path": str(TOKENIZER_PATH).replace("/", "\\")}
     config = SimpleNamespace(vocab_size=tokenizer.get_vocab_size(), context_length=512)
     monkeypatch.setattr("ml.inference.generate.load_checkpoint",
                         lambda _path: (model, state, config))
@@ -263,11 +266,11 @@ def test_api_generation_uses_checkpoint_tokenizer_and_eos_handling(tmp_path, mon
 
 
 def _licensed_document(index: int) -> str:
-    return (
-        f"Document {index} describes careful observation, clear reasoning, and evidence. "
-        "Readers compare measurements, record results, and explain how conclusions follow "
-        "from the facts that were gathered during the investigation. "
-    ) * 3
+    words = [
+        f"word{chr(97 + index)}{chr(97 + position // 26)}{chr(97 + position % 26)}"
+        for position in range(300)
+    ]
+    return " ".join(words)
 
 
 def test_licensed_corpus_builds_disjoint_reproducible_splits(tmp_path):
@@ -309,15 +312,19 @@ def test_licensed_corpus_builds_disjoint_reproducible_splits(tmp_path):
     outputs = prepare_corpus(manifest, TOKENIZER_PATH, tmp_path / "out",
                              context_length=32, seed=7)
 
+    provenance = json.loads((tmp_path / "out" / "provenance.json").read_text())
     hashes = []
     first_run = {}
     for split in ("train", "val", "test"):
         with outputs[split].open("rb") as data_file:
             dataset = pickle.load(data_file)
+        assert hashlib.sha256(outputs[split].read_bytes()).hexdigest() == provenance["split_hashes"][split]
+        assert dataset["content_sha256"] == provenance["split_content_sha256"][split]
         hashes.append({document["source_sha256"] for document in dataset["documents"]})
         first_run[split] = dataset
         assert dataset["split"] == split
         assert dataset["dataset_version"] == "fixture-v1"
+        assert dataset["tokenizer_path"] == TOKENIZER_PATH.as_posix()
         assert dataset["acquisition_date"] == date.today().isoformat()
         assert dataset["duplicate_document_count"] == 1
         assert dataset["excluded_document_count"] == 3
@@ -330,6 +337,10 @@ def test_licensed_corpus_builds_disjoint_reproducible_splits(tmp_path):
         assert all(document["source_sha256"] and document["license_url"]
                    and document["source_version"] for document in dataset["documents"])
         assert dataset["cleaning_rules"] and dataset["deduplication_rule"]
+        assert dataset["quality_metrics"]["word_count"] > 0
+        assert dataset["quality_metrics"]["unique_word_count"] > 0
+        assert 0.0 <= dataset["quality_metrics"]["latin_letter_fraction"] <= 1.0
+        assert 0.0 <= dataset["quality_metrics"]["mean_document_unique_trigram_fraction"] <= 1.0
         assert all(x.shape == y.shape == (32,) for x, y in dataset["samples"])
     assert not (hashes[0] & hashes[1] or hashes[0] & hashes[2] or hashes[1] & hashes[2])
     repeated_outputs = prepare_corpus(manifest, TOKENIZER_PATH, tmp_path / "out_repeat",
@@ -337,6 +348,7 @@ def test_licensed_corpus_builds_disjoint_reproducible_splits(tmp_path):
     for split, path in repeated_outputs.items():
         with path.open("rb") as data_file:
             repeated = pickle.load(data_file)
+        assert repeated["content_sha256"] == first_run[split]["content_sha256"]
         assert [doc["source_sha256"] for doc in repeated["documents"]] == [
             doc["source_sha256"] for doc in first_run[split]["documents"]
         ]
@@ -407,3 +419,99 @@ def test_licensed_corpus_rejects_mismatched_license_url(tmp_path):
 
     with pytest.raises(ValueError, match="does not match CC0-1.0"):
         prepare_corpus(manifest, TOKENIZER_PATH, tmp_path / "out", context_length=32)
+
+
+def test_licensed_corpus_rejects_near_duplicates(tmp_path):
+    doc_dir = tmp_path / "documents"
+    doc_dir.mkdir()
+    alphabetic_words = [
+        f"lexeme{chr(97 + index // 26)}{chr(97 + index % 26)}"
+        for index in range(300)
+    ]
+    original = " ".join(alphabetic_words)
+    near_duplicate = " ".join(alphabetic_words[:150] + alphabetic_words[151:])
+    entries = []
+    for index, text in enumerate((_licensed_document(0), _licensed_document(1),
+                                  _licensed_document(2), original, near_duplicate)):
+        filename = f"doc-{index}.txt"
+        (doc_dir / filename).write_text(text, encoding="utf-8")
+        entries.append({
+            "path": f"documents/{filename}",
+            "title": f"Fixture document {index}",
+            "source_url": f"https://example.org/fixture/{index}",
+            "license": "CC0-1.0",
+            "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "license_evidence_url": f"https://example.org/fixture/{index}/license",
+            "attribution": "Unit-test fixture",
+            "source_version": "fixture-v1",
+            "rights_basis": "Test-only fixture content",
+            "rights_verified": True,
+        })
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({
+        "dataset_version": "fixture-v1",
+        "acquisition_date": date.today().isoformat(),
+        "documents": entries,
+    }), encoding="utf-8")
+
+    outputs = prepare_corpus(manifest, TOKENIZER_PATH, tmp_path / "out",
+                             context_length=32, seed=11)
+    provenance = json.loads((tmp_path / "out" / "provenance.json").read_text())
+    assert provenance["near_duplicates_removed"] == 1
+    assert any(item["reason"] == "near_duplicate_normalized_content"
+               for item in provenance["excluded_documents"])
+    documents = [
+        document
+        for split in ("train", "val", "test")
+        for document in pickle.load(outputs[split].open("rb"))["documents"]
+    ]
+    assert sum("doc-3.txt" in document["path"] for document in documents) == 1
+    assert sum("doc-4.txt" in document["path"] for document in documents) == 0
+
+
+def test_cpython_collector_verifies_pinned_git_blob_and_writes_manifest(tmp_path):
+    relative_path = "Doc/tutorial/example.rst"
+    content = b"An educational example from the pinned documentation.\n"
+    archive_path = tmp_path / "source.zip"
+    with ZipFile(archive_path, "w") as archive:
+        archive.writestr(f"cpython-{CPYTHON_COMMIT}/{relative_path}", content)
+    tree_path = tmp_path / "tree.json"
+    tree_path.write_text(json.dumps({
+        "truncated": False,
+        "tree": [{
+            "path": relative_path,
+            "type": "blob",
+            "sha": _git_blob_sha1(content),
+        }],
+    }), encoding="utf-8")
+
+    manifest_path = collect_cpython_docs(archive_path, tree_path, tmp_path / "collected")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["source_artifact"]["commit"] == CPYTHON_COMMIT
+    assert manifest["source_artifact"]["archive_sha256"]
+    assert manifest["documents"][0]["source_git_blob_sha1"] == _git_blob_sha1(content)
+    assert manifest["documents"][0]["rights_verified"] is True
+    assert (tmp_path / "collected" / "sources" / relative_path).read_bytes() == content
+
+    with pytest.raises(FileExistsError):
+        collect_cpython_docs(archive_path, tree_path, tmp_path / "collected")
+
+
+def test_cpython_collector_rejects_modified_source_blob(tmp_path):
+    relative_path = "Doc/tutorial/example.rst"
+    archive_path = tmp_path / "source.zip"
+    with ZipFile(archive_path, "w") as archive:
+        archive.writestr(f"cpython-{CPYTHON_COMMIT}/{relative_path}", b"modified")
+    tree_path = tmp_path / "tree.json"
+    tree_path.write_text(json.dumps({
+        "truncated": False,
+        "tree": [{
+            "path": relative_path,
+            "type": "blob",
+            "sha": _git_blob_sha1(b"expected"),
+        }],
+    }), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Git blob verification failed"):
+        collect_cpython_docs(archive_path, tree_path, tmp_path / "collected")
+    assert not (tmp_path / "collected").exists()

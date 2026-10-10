@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import collections
 import hashlib
 import json
 import os
 import pickle
 import random
 import re
+import math
 import tempfile
 import unicodedata
 from datetime import date
@@ -18,17 +20,116 @@ from typing import Any
 import torch
 from tokenizers import Tokenizer
 
-SUPPORTED_LICENSES = {"CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0", "Public-Domain"}
+from ml.path_utils import portable_path_string
+
+SUPPORTED_LICENSES = {
+    "CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0", "PSF-2.0", "Public-Domain",
+}
 SPLITS = ("train", "val", "test")
+WORD_PATTERN = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)?", re.UNICODE)
+NEAR_DUPLICATE_JACCARD_THRESHOLD = 0.9
 
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _dataset_content_sha256(payload: dict[str, Any]) -> str:
+    stable_metadata = {
+        key: value for key, value in payload.items()
+        if key not in {"samples", "content_sha256"}
+    }
+    digest = hashlib.sha256(json.dumps(
+        stable_metadata,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8"))
+    for inputs, targets in payload["samples"]:
+        for tensor in (inputs, targets):
+            canonical = tensor.detach().cpu().contiguous().numpy().astype("<i8", copy=False)
+            digest.update(canonical.tobytes())
+    return digest.hexdigest()
+
+
+def _word_shingles(text: str, size: int = 5) -> tuple[list[str], set[int]]:
+    words = WORD_PATTERN.findall(text.casefold())
+    if len(words) < size:
+        return words, set()
+    signature: list[int] = []
+    for index in range(len(words) - size + 1):
+        signature.append(int.from_bytes(hashlib.blake2b(
+            " ".join(words[index:index + size]).encode("utf-8"),
+            digest_size=8,
+        ).digest(), "big"))
+    return words, set(sorted(set(signature))[:128])
+
+
+def _language_metrics(text: str, words: list[str], shingles: set[int]) -> dict[str, Any]:
+    script_counts: collections.Counter[str] = collections.Counter()
+    letter_count = 0
+    for character in text:
+        if character.isalpha():
+            letter_count += 1
+            name = unicodedata.name(character, "UNKNOWN")
+            script_counts[name.split(" ", 1)[0]] += 1
+
+    word_counts = collections.Counter(words)
+    word_count = len(words)
+    word_entropy = -sum(
+        (count / word_count) * math.log2(count / word_count)
+        for count in word_counts.values()
+    ) if word_count else 0.0
+    trigram_count = max(0, word_count - 2)
+    unique_trigrams = len({
+        tuple(words[index:index + 3])
+        for index in range(trigram_count)
+    })
+    return {
+        "word_count": word_count,
+        "unique_word_count": len(word_counts),
+        "type_token_ratio": len(word_counts) / word_count if word_count else 0.0,
+        "word_entropy_bits": word_entropy,
+        "unique_fivegram_count": len(shingles),
+        "unique_trigram_fraction": unique_trigrams / trigram_count if trigram_count else 0.0,
+        "letter_script_counts": dict(sorted(script_counts.items())),
+        "latin_letter_fraction": script_counts.get("LATIN", 0) / letter_count if letter_count else 0.0,
+    }
+
+
+def _corpus_quality_metrics(documents: list[dict[str, Any]]) -> dict[str, Any]:
+    word_count = sum(document["word_count"] for document in documents)
+    unique_words = set()
+    script_counts: collections.Counter[str] = collections.Counter()
+    for document in documents:
+        words, _ = _word_shingles(document["text"])
+        unique_words.update(words)
+        script_counts.update(document["quality_metrics"]["letter_script_counts"])
+    letter_count = sum(script_counts.values())
+    return {
+        "document_count": len(documents),
+        "word_count": word_count,
+        "unique_word_count": len(unique_words),
+        "type_token_ratio": len(unique_words) / word_count if word_count else 0.0,
+        "letter_script_counts": dict(sorted(script_counts.items())),
+        "latin_letter_fraction": script_counts.get("LATIN", 0) / letter_count if letter_count else 0.0,
+        "mean_document_type_token_ratio": (
+            sum(document["quality_metrics"]["type_token_ratio"] for document in documents)
+            / len(documents)
+        ) if documents else 0.0,
+        "mean_document_unique_trigram_fraction": (
+            sum(document["quality_metrics"]["unique_trigram_fraction"] for document in documents)
+            / len(documents)
+        ) if documents else 0.0,
+    }
+
+
 def _read_documents(
     manifest_path: Path,
-) -> tuple[list[dict[str, Any]], str, int, list[dict[str, Any]], str, str]:
+) -> tuple[
+    list[dict[str, Any]], str, int, int, list[dict[str, Any]], str, str,
+    dict[str, Any], dict[str, Any],
+]:
     raw_manifest = manifest_path.read_bytes()
     manifest = json.loads(raw_manifest.decode("utf-8"))
     if not isinstance(manifest, dict) or not isinstance(manifest.get("documents"), list):
@@ -70,6 +171,8 @@ def _read_documents(
             raise ValueError(f"Document {index} license_url does not match CC-BY-4.0")
         if license_id == "CC-BY-SA-4.0" and entry["license_url"].rstrip("/") != "https://creativecommons.org/licenses/by-sa/4.0":
             raise ValueError(f"Document {index} license_url does not match CC-BY-SA-4.0")
+        if license_id == "PSF-2.0" and entry["license_url"].rstrip("/") != "https://docs.python.org/3/license.html":
+            raise ValueError(f"Document {index} license_url does not match PSF-2.0")
         if license_id == "Public-Domain" and not str(entry.get("jurisdiction", "")).strip():
             raise ValueError(f"Public-Domain document {index} must record its jurisdiction")
 
@@ -109,11 +212,21 @@ def _read_documents(
             })
             continue
         normalized = re.sub(r"\s+", " ", text).casefold()
-        if len(normalized.split()) < 20:
+        words, shingles = _word_shingles(normalized)
+        if len(words) < 20:
             excluded_documents.append({
                 "path": entry["path"],
                 "reason": "fewer_than_20_words",
                 "source_sha256": _sha256(raw_text),
+            })
+            continue
+        quality_metrics = _language_metrics(text, words, shingles)
+        if quality_metrics["latin_letter_fraction"] < 0.6:
+            excluded_documents.append({
+                "path": entry["path"],
+                "reason": "insufficient_latin_script_fraction",
+                "source_sha256": _sha256(raw_text),
+                "latin_letter_fraction": quality_metrics["latin_letter_fraction"],
             })
             continue
         content_hash = _sha256(normalized.encode("utf-8"))
@@ -121,6 +234,36 @@ def _read_documents(
             excluded_documents.append({
                 "path": entry["path"],
                 "reason": "duplicate_normalized_content",
+                "source_sha256": _sha256(raw_text),
+                "normalized_content_sha256": content_hash,
+            })
+            continue
+        near_duplicate = None
+        if shingles:
+            for previous in documents:
+                previous_shingles = previous["_word_shingles"]
+                if not previous_shingles:
+                    continue
+                previous_count = previous["word_count"]
+                if min(len(words), previous_count) / max(len(words), previous_count) < NEAR_DUPLICATE_JACCARD_THRESHOLD:
+                    continue
+                intersection_count = len(shingles & previous_shingles)
+                if len(shingles) < 128 or len(previous_shingles) < 128:
+                    similarity = intersection_count / max(
+                        1, len(shingles | previous_shingles)
+                    )
+                else:
+                    similarity = intersection_count / 128
+                if similarity >= NEAR_DUPLICATE_JACCARD_THRESHOLD:
+                    near_duplicate = (previous, similarity)
+                    break
+        if near_duplicate is not None:
+            previous, similarity = near_duplicate
+            excluded_documents.append({
+                "path": entry["path"],
+                "reason": "near_duplicate_normalized_content",
+                "duplicate_of": previous["path"],
+                "jaccard_5gram_similarity": similarity,
                 "source_sha256": _sha256(raw_text),
                 "normalized_content_sha256": content_hash,
             })
@@ -142,23 +285,31 @@ def _read_documents(
             "jurisdiction": entry.get("jurisdiction"),
             "source_sha256": _sha256(raw_text),
             "normalized_content_sha256": content_hash,
-            "word_count": len(text.split()),
+            "word_count": len(words),
+            "quality_metrics": quality_metrics,
             "nonempty_line_count": sum(bool(line.strip()) for line in text.splitlines()),
             "unique_nonempty_lines": len({
                 re.sub(r"\s+", " ", line).casefold()
                 for line in text.splitlines()
                 if line.strip()
             }),
+            "_word_shingles": shingles,
         })
     if len(documents) < 3:
         raise ValueError("At least three unique, rights-reviewed documents are required for disjoint splits")
+    quality_metrics = _corpus_quality_metrics(documents)
+    for document in documents:
+        document.pop("_word_shingles")
     return (
         documents,
         _sha256(raw_manifest),
         sum(entry["reason"] == "duplicate_normalized_content" for entry in excluded_documents),
+        sum(entry["reason"] == "near_duplicate_normalized_content" for entry in excluded_documents),
         excluded_documents,
         dataset_version.strip(),
         acquisition_date,
+        manifest.get("source_artifact", {}),
+        quality_metrics,
     )
 
 
@@ -201,8 +352,9 @@ def prepare_corpus(
     if existing:
         raise FileExistsError(f"Refusing to overwrite existing dataset file(s): {', '.join(existing)}")
 
-    (documents, manifest_sha256, duplicate_document_count, excluded_documents,
-     dataset_version, acquisition_date) = _read_documents(manifest_path)
+    (documents, manifest_sha256, duplicate_document_count, near_duplicate_document_count,
+     excluded_documents, dataset_version, acquisition_date,
+     source_artifact, corpus_quality_metrics) = _read_documents(manifest_path)
     tokenizer = Tokenizer.from_file(str(tokenizer_path))
     eos_token_id = tokenizer.token_to_id("</s>")
     pad_token_id = tokenizer.token_to_id("<pad>")
@@ -241,16 +393,17 @@ def prepare_corpus(
         metadata = {
             "samples": samples,
             "dataset_version": dataset_version,
+            "source_artifact": source_artifact,
             "split": split,
             "held_out": split != "train",
             "seed": seed,
             "acquisition_date": acquisition_date,
             "context_length": context_length,
-            "tokenizer_path": str(tokenizer_path),
+            "tokenizer_path": portable_path_string(tokenizer_path),
             "tokenizer_sha256": tokenizer_sha256,
             "tokenizer_vocab_size": tokenizer.get_vocab_size(),
             "vocab_size": tokenizer.get_vocab_size(),
-            "manifest_path": str(manifest_path),
+            "manifest_path": portable_path_string(manifest_path),
             "manifest_sha256": manifest_sha256,
             "cleaning_rules": [
                 "decode UTF-8 with optional leading BOM",
@@ -261,23 +414,70 @@ def prepare_corpus(
                 "exclude documents with fewer than 20 words",
             ],
             "deduplication_rule": "SHA-256 of whitespace-collapsed, case-folded Unicode content",
+            "near_duplicate_rule": (
+                f"bottom-128 five-word-shingle MinHash estimate >= "
+                f"{NEAR_DUPLICATE_JACCARD_THRESHOLD}; candidate documents must have "
+                "a word-count ratio at least equal to the threshold"
+            ),
             "document_count": len(split_docs),
             "duplicate_document_count": duplicate_document_count,
+            "near_duplicate_document_count": near_duplicate_document_count,
             "excluded_document_count": len(excluded_documents),
             "excluded_documents": excluded_documents,
             "token_count": sum(token_counts.values()),
             "sample_count": len(samples),
+            "supervised_token_count": sum(
+                int((target != -1).sum().item()) for _, target in samples
+            ),
+            "quality_metrics": _corpus_quality_metrics(split_docs),
+            "corpus_quality_metrics": corpus_quality_metrics,
             "documents": document_metadata,
             "label_ignore_index": -1,
         }
         split_payloads[split] = metadata
 
+    for payload in split_payloads.values():
+        payload["content_sha256"] = _dataset_content_sha256(payload)
+
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     staging_dir = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.stage-", dir=output_dir.parent))
     try:
+        split_hashes = {}
         for split, payload in split_payloads.items():
-            with (staging_dir / f"{split}.pkl").open("xb") as output_file:
+            split_path = staging_dir / f"{split}.pkl"
+            with split_path.open("xb") as output_file:
                 pickle.dump(payload, output_file)
+            split_hashes[split] = _sha256(split_path.read_bytes())
+        provenance = {
+            "dataset_version": dataset_version,
+            "manifest_sha256": manifest_sha256,
+            "source_artifact": source_artifact,
+            "tokenizer_path": portable_path_string(tokenizer_path),
+            "tokenizer_sha256": tokenizer_sha256,
+            "seed": seed,
+            "context_length": context_length,
+            "split_hashes": split_hashes,
+            "split_content_sha256": {
+                split: split_payloads[split]["content_sha256"] for split in SPLITS
+            },
+            "split_document_counts": {
+                split: len(split_docs) for split, split_docs in split_documents.items()
+            },
+            "split_token_counts": {
+                split: split_payloads[split]["token_count"] for split in SPLITS
+            },
+            "split_supervised_token_counts": {
+                split: split_payloads[split]["supervised_token_count"] for split in SPLITS
+            },
+            "exact_duplicates_removed": duplicate_document_count,
+            "near_duplicates_removed": near_duplicate_document_count,
+            "excluded_document_count": len(excluded_documents),
+            "excluded_documents": excluded_documents,
+            "quality_metrics": corpus_quality_metrics,
+        }
+        with (staging_dir / "provenance.json").open("x", encoding="utf-8") as output_file:
+            json.dump(provenance, output_file, indent=2, sort_keys=True)
+            output_file.write("\n")
         os.rename(staging_dir, output_dir)
     except BaseException:
         for staged_file in staging_dir.iterdir():

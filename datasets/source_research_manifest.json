@@ -1,8 +1,8 @@
 {
   "manifest_version": 1,
   "research_date": "2026-10-10",
-  "status": "research_only_no_source_text_acquired",
-  "acquisition_note": "Wikisource page-content requests returned HTTP 429. No text was downloaded, hashed, cleaned, or included in a dataset.",
+  "status": "licensed_source_acquired_dataset_built",
+  "acquisition_note": "Wikisource page-content requests returned HTTP 429 and was not acquired. CPython v3.14.7 documentation was acquired from the immutable upstream commit after verifying the pinned tree and every document Git blob against the archive; the PSF-2.0 terms were reviewed and the documents were processed into disjoint local pretraining splits. No instruction-response source was acquired.",
   "policy_references": [
     {
       "title": "Wikisource Copyright policy",
@@ -28,6 +28,57 @@
   ],
   "candidates": [
     {
+      "source_id": "python-cpython-docs-v3.14.7",
+      "title": "CPython official documentation",
+      "author": "Python Software Foundation and CPython documentation contributors",
+      "source_url": "https://github.com/python/cpython/tree/823f0323ee6ec1402088b73bce1a38473cac36dc/Doc",
+      "release_tag": "v3.14.7",
+      "commit": "823f0323ee6ec1402088b73bce1a38473cac36dc",
+      "commit_timestamp": "2026-08-05T10:29:49Z",
+      "license": "PSF-2.0",
+      "license_url": "https://docs.python.org/3/license.html",
+      "license_evidence_url": "https://github.com/python/cpython/blob/823f0323ee6ec1402088b73bce1a38473cac36dc/Doc/license.rst",
+      "rights_status": "accepted_for_local_training_with_notice_retention",
+      "rights_basis": "Pinned Doc/license.rst grants a worldwide, royalty-free license to reproduce, prepare derivatives, distribute, and otherwise use Python and its associated documentation; retain PSF license and copyright notices. Documentation examples, recipes, and code are additionally dual licensed under Zero-Clause BSD.",
+      "attribution": "Python Software Foundation and CPython documentation contributors; retain the PSF License Version 2 and copyright notices from the source.",
+      "acquisition_date": "2026-10-10",
+      "archive_sha256": "4d91279383772be3f216bd7c44fdbd45f68efe30e2ea2c16ad062348666927aa",
+      "tree_sha256": "6ef5e62adcb3114420680e8702b07357237b14cd7a4fa178ae6c04e420af6ab2",
+      "source_document_count": 540,
+      "eligible_document_count": 537,
+      "tokenizer_sha256": "47ccdfb870d203c002c65c64e199aeb0ec7b36fc9a91e2826fd2c7d9f0456c4d",
+      "train_documents": 429,
+      "validation_documents": 54,
+      "test_documents": 54,
+      "train_tokens": 5049389,
+      "validation_tokens": 438043,
+      "test_tokens": 601913,
+      "context_length": 512,
+      "dataset_path": "datasets/processed/cpython_docs_3_14_7_v4_ctx512_seed42",
+      "alternate_context_128_dataset_path": "datasets/processed/cpython_docs_3_14_7_v4_ctx128_seed42",
+      "split_file_sha256": {
+        "train": "d2aae57b2953d0e8e10878350f496bd3dff3193d33c7b0af9ed774ad05b00a49",
+        "validation": "1106bb2fd22cbfa6325fb52ea34194262d09cf306355b3338e3add88410123c3",
+        "test": "ca7f8c846ae34ac89541dee0761ebb11e63a6e0732ab1e428638e1f10e029891"
+      },
+      "split_content_sha256": {
+        "train": "a997a011041334eca2cf2d8e3503dbdc31e383ac4e71fd794cb5572d4f66f611",
+        "validation": "d420401488efc0b32de9faec36bb6a9a5c147cda7c63e83464dc407fb029be50",
+        "test": "3c0ddba4111a21db62ae946645fdaf13c2f9a4587dafd38d5721c9b0ee8f6d79"
+      }
+    },
+    {
+      "source_id": "wikitext-103",
+      "title": "WikiText-103",
+      "source_url": "https://huggingface.co/datasets/Salesforce/wikitext",
+      "license": null,
+      "rights_status": "rejected_metadata_and_provenance_conflict",
+      "rights_basis": "The dataset card describes CC BY-SA 4.0, while the repository/API metadata tags the dataset cc-by-sa-3.0 and GFDL; the card's provenance fields are incomplete. No artifact was downloaded or accepted pending authoritative resolution.",
+      "acquired_on": null,
+      "downloaded": false,
+      "excluded_from_training_data": true
+    },
+    {
       "source_id": "enwikisource-mystery-tales-tell-tale-heart",
       "title": "The Tell-Tale Heart",
       "author": "Edgar Allan Poe",
@@ -40,7 +91,7 @@
       "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
       "license_evidence_url": "https://en.wikisource.org/wiki/Wikisource:Copyright_policy",
       "work_rights_evidence": "The page identifies Poe and the 1843 publication; a public-domain assertion was observed in the source page material. Confirm the exact edition and jurisdiction-specific status before use.",
-      "rights_status": "candidate_pending_human_jurisdiction_review",
+      "rights_status": "rejected_pending_human_jurisdiction_and_sharealike_review",
       "source_version": "Wikisource revision 16279506",
       "acquired_on": null,
       "downloaded": false,
@@ -50,11 +101,36 @@
     }
   ],
   "dataset_status": {
-    "pretraining": "not_created_no_source_documents_passed_rights_review",
+    "pretraining": "built_local_cpython_docs_psf_2_0",
     "instruction_response": "separate_pipeline_only_no_new_instruction_targets_acquired",
-    "document_count": 0,
-    "token_count": 0,
-    "tokenizer_identity": null,
-    "train_validation_test_splits": null
+    "source_document_count": 540,
+    "eligible_document_count": 537,
+    "document_count": 537,
+    "token_count": 6089345,
+    "tokenizer_identity": {
+      "path": "datasets/processed/tokenizer_veyra004.json",
+      "sha256": "47ccdfb870d203c002c65c64e199aeb0ec7b36fc9a91e2826fd2c7d9f0456c4d",
+      "vocab_size": 4096
+    },
+    "train_validation_test_splits": {
+      "seed": 42,
+      "context_length": 512,
+      "dataset_path": "datasets/processed/cpython_docs_3_14_7_v4_ctx512_seed42",
+      "train": {"documents": 429, "tokens": 5049389, "supervised_tokens": 5048960},
+      "validation": {"documents": 54, "tokens": 438043, "supervised_tokens": 437989},
+      "test": {"documents": 54, "tokens": 601913, "supervised_tokens": 601859},
+      "split_file_sha256": {
+        "train": "d2aae57b2953d0e8e10878350f496bd3dff3193d33c7b0af9ed774ad05b00a49",
+        "validation": "1106bb2fd22cbfa6325fb52ea34194262d09cf306355b3338e3add88410123c3",
+        "test": "ca7f8c846ae34ac89541dee0761ebb11e63a6e0732ab1e428638e1f10e029891"
+      },
+      "split_content_sha256": {
+        "train": "a997a011041334eca2cf2d8e3503dbdc31e383ac4e71fd794cb5572d4f66f611",
+        "validation": "d420401488efc0b32de9faec36bb6a9a5c147cda7c63e83464dc407fb029be50",
+        "test": "3c0ddba4111a21db62ae946645fdaf13c2f9a4587dafd38d5721c9b0ee8f6d79"
+      }
+    },
+    "continuous_text_only": true,
+    "pretraining_separate_from_instruction_response": true
   }
 }
