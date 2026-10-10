@@ -107,6 +107,7 @@ def collect_cpython_docs(
                     "rights_verified": True,
                     "jurisdiction": "Worldwide license grant in PSF License Version 2",
                     "source_git_blob_sha1": expected_git_sha,
+                    "source_file_sha256": hashlib.sha256(content).hexdigest(),
                 })
     except BaseException:
         if output_root.exists():
