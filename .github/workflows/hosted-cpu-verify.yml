@@ -11,8 +11,6 @@ on:
       - scripts/hosted_cpu_verify.py
       - tests/unit/**
       - datasets/source_research_manifest.json
-      - docs/STAGE_C_CORPUS_READINESS.md
-      - docs/STAGE_D_COMPUTE_AND_PILOT.md
 
 permissions:
   contents: read
@@ -65,6 +63,7 @@ jobs:
           python -m pytest tests/unit/test_stage_b_c_data.py tests/unit/test_training_validation.py -q
 
       - name: Verify baseline validation and fixed prompts
+        if: github.event_name == 'workflow_dispatch'
         run: |
           python -m scripts.hosted_cpu_verify \
             --checkpoint checkpoints/veyra004_pretrain_v5/checkpoint_final.pt \

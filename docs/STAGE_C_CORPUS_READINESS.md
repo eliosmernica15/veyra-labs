@@ -92,7 +92,7 @@ The training-loop unit test executes a single optimizer step against a tiny synt
 
 ## Further laptop training is paused
 
-The 10-step pilot took approximately 11.4 minutes on the CPU. Given the user's report that laptop compute is overwhelming the machine, no follow-on training is proposed on this laptop. The user later explicitly authorized hosted compute. A private GitHub artifact release has been created, and a manual CPU-only baseline-verification workflow is prepared; see the Stage D report for verification state. This does not mean training was run remotely.
+The 10-step pilot took approximately 11.4 minutes on the CPU. Given the user's report that laptop compute is overwhelming the machine, no follow-on training is proposed on this laptop. The user later explicitly authorized hosted compute. A private GitHub artifact release has been created, and the manual CPU-only baseline-verification workflow completed successfully: 19 focused tests passed and the preserved model's baseline evaluation/generation was recorded without changing weights. See the Stage D report for results. This does not mean training was run remotely.
 
 ## Remaining blockers and human decisions
 
