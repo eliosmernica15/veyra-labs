@@ -1,14 +1,13 @@
 # Stage C Corpus and Training Readiness
 
 **Assessment date:** 2026-10-10
-**Status:** Corpus preparation and training-loop regressions verified. A bounded 10-step CPU pilot was subsequently run and evaluated; no further training is underway. Hosted artifact storage and a manual CPU verification workflow are now being prepared, as detailed in [Stage D](./STAGE_D_COMPUTE_AND_PILOT.md).
+**Status:** Corpus preparation and training-loop regressions were verified; the bounded 10-step CPU pilot was evaluated; and hosted CPU baseline verification completed. Reviewed code and reports were merged to the private repository. No further training is underway; see [Stage D](./STAGE_D_COMPUTE_AND_PILOT.md) for hosted results.
 
 ## Repository preservation and security
 
-- Local `master` and `origin/master` are both at `80d86685039001925d45ac3168a054fd6533ad34`. No source commit or branch push has yet been made for this readiness work. A separate private prerelease now holds verified copies of the v5 checkpoint, tokenizer, all three CPython split files, provenance, and the pinned PSF license notice; no `.env` or credentials were uploaded.
-- The index is clean. The worktree has 57 `git status --short` entries (Git folds untracked directories); existing unrelated modified/untracked artifacts were left untouched. This work adds only the corpus tooling, training-loop changes, tests, research-manifest update, this report, and the new local data artifacts.
-- `.env` is ignored and is not tracked in the current tree. Historical commit `ec1eb318733b79ea5bbd114d6220be101325c070` contains it; no secret values were printed and Git history was not rewritten.
-- Credential rotation has not been performed. Manually identify the issuer of `VEYRA_API_KEY` in private account/configuration records, revoke the exposed key in that provider's management interface, issue a replacement only if still needed, and update the local ignored `.env` privately. If the key is only used by a local service, rotate it in that service's private configuration. Do not paste credentials into chat.
+- The reviewed Stage B/C and hosted-verification changes were selectively committed and merged through PRs #1 and #2. A separate private prerelease holds verified copies of the v5 checkpoint, tokenizer, all three CPython split files, provenance, and the pinned PSF license notice; no `.env` or credentials were uploaded.
+- Unrelated local modifications and untracked artifacts remain preserved and were not staged or discarded as part of the reviewed commits.
+- `.env` is ignored and absent from the current tracked tree. Historical commit `ec1eb318733b79ea5bbd114d6220be101325c070` contains it, but a value-safe comparison confirmed its `VEYRA_BACKEND_URL` and `VEYRA_API_KEY` entries exactly match the development placeholders in `.env.example` (`localhost` and `local-dev-key`); the other differing entries are non-secret training settings. The application code does not consume `VEYRA_API_KEY`. No provider-issued credential was present, so no credential rotation is needed. Git history was not rewritten.
 - `AGENT_AUTONOMOUS_EXECUTION` remains `False`.
 - The preserved Veyra-004 v5 checkpoint is unchanged: 722,729,765 bytes; SHA-256 `7aaee496c5adff3f652a30d67b3bf12dc5438505364ea5a7582a869b43b2110b`. Its verified configuration is vocab 4,096, context 512, embedding 768, 8 layers, 12 heads, hidden size 3,072, step 100. Its tokenizer path is `datasets/processed/tokenizer_veyra004.json`; the tokenizer digest is independently recorded and checked against the data artifact, as the checkpoint itself does not carry a tokenizer SHA-256 field.
 
@@ -96,8 +95,8 @@ The 10-step pilot took approximately 11.4 minutes on the CPU. Given the user's r
 
 ## Remaining blockers and human decisions
 
-1. Manually revoke/replace the historically exposed `VEYRA_API_KEY` at its private issuing provider (or rotate it in the local service if locally issued). No rotation is claimed here.
+1. No credential remediation remains for the historical `.env`: its secret-named entry is only the documented development placeholder. Keep the real local `.env` ignored; if a real key is later configured for another service, issue and manage it there rather than committing it.
 2. Obtain human/legal advice on preserving PSF notices and how training derivatives, datasets, and any future model/checkpoint distribution should be handled.
 3. Obtain more independent, rights-cleared domains before treating this narrow Python-document corpus as sufficient for general language modeling. Continue to exclude unresolved sources rather than weakening the gate.
-4. Reviewed code, tests, and reports still need a selective source commit and branch push; do not stage the broader dirty worktree.
+4. The reviewed code, tests, and reports have been selectively committed, pushed, and merged; unrelated worktree artifacts remain local.
 5. Veyra-004 remains incoherent on fixed and unseen prompts, despite a lower held-out technical-document loss after the CPU pilot. The hosted CPU workflow is for verification, not a claim of improved language quality or authorization to repeat the rejected pilot unchanged.
