@@ -66,7 +66,7 @@ jobs:
 
       - name: Verify baseline validation and fixed prompts
         run: |
-          python scripts/hosted_cpu_verify.py \
+          python -m scripts.hosted_cpu_verify \
             --checkpoint checkpoints/veyra004_pretrain_v5/checkpoint_final.pt \
             --tokenizer datasets/processed/tokenizer_veyra004.json \
             --validation datasets/processed/cpython_docs_3_14_7_v4_ctx512_seed42/val.pkl \
